@@ -44,25 +44,38 @@ const HostProperties = () => {
   const [title, setTitle] = useState('');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
-  const [propertyType, setPropertyType] = useState('BOTH'); // SHORT_TERM, LONG_TERM, BOTH
+  const [propertyType, setPropertyType] = useState('BOTH');
   const [pricePerDay, setPricePerDay] = useState('');
   const [pricePerMonth, setPricePerMonth] = useState('');
   const [facilities, setFacilities] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [properties, setProperties] = useState([]);
+  const [hostBookings, setHostBookings] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!user) return;
-    const q = query(
+    const qProps = query(
       collection(db, 'properties'),
       where('hostId', '==', user.uid)
     );
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsubProps = onSnapshot(qProps, (snapshot) => {
       setProperties(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => unsub();
+
+    const qBookings = query(
+      collection(db, 'bookings'),
+      where('hostId', '==', user.uid)
+    );
+    const unsubBookings = onSnapshot(qBookings, (snapshot) => {
+      setHostBookings(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => {
+      unsubProps();
+      unsubBookings();
+    };
   }, [user]);
 
   const handleSubmit = async (e) => {
@@ -117,10 +130,32 @@ const HostProperties = () => {
     });
   };
 
+  const confirmBooking = async (booking) => {
+    if (booking.status !== 'pending') return;
+    await updateDoc(doc(db, 'bookings', booking.id), {
+      status: 'confirmed',
+    });
+  };
+
+  const cancelBooking = async (booking) => {
+    if (booking.status === 'cancelled') return;
+    await updateDoc(doc(db, 'bookings', booking.id), {
+      status: 'cancelled',
+    });
+  };
+
   return (
     <div>
       <h1>Host Properties</h1>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '500px' }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          maxWidth: '500px',
+        }}
+      >
         <label>
           Title
           <input
@@ -220,14 +255,70 @@ const HostProperties = () => {
               <img
                 src={p.imageUrl}
                 alt={p.title}
-                style={{ maxWidth: '200px', display: 'block', marginTop: '4px' }}
+                style={{
+                  maxWidth: '200px',
+                  display: 'block',
+                  marginTop: '4px',
+                }}
               />
             )}
-            <button onClick={() => toggleActive(p)} style={{ marginTop: '4px' }}>
+            <button
+              onClick={() => toggleActive(p)}
+              style={{ marginTop: '4px' }}
+            >
               Toggle active
             </button>
           </li>
         ))}
+        {properties.length === 0 && <p>No properties yet.</p>}
+      </ul>
+
+      <h2>Bookings for your properties</h2>
+      <ul>
+        {hostBookings.map((b) => {
+          const prop = properties.find((p) => p.id === b.propertyId);
+          return (
+            <li
+              key={b.id}
+              style={{
+                marginBottom: '8px',
+                padding: '6px',
+                border: '1px solid #ccc',
+              }}
+            >
+              <div>
+                Property:{' '}
+                {prop ? prop.title : b.propertyId}
+              </div>
+              <div>
+                Stay type: {b.stayType} | {b.startDate}
+                {b.endDate && b.endDate !== b.startDate && ` → ${b.endDate}`}
+              </div>
+              <div>Status: {b.status}</div>
+              {b.status === 'pending' && (
+                <>
+                  <button onClick={() => confirmBooking(b)}>
+                    Confirm booking
+                  </button>
+                  <button
+                    onClick={() => cancelBooking(b)}
+                    style={{ marginLeft: '8px' }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+              {b.status === 'confirmed' && (
+                <button onClick={() => cancelBooking(b)}>
+                  Cancel booking
+                </button>
+              )}
+            </li>
+          );
+        })}
+        {hostBookings.length === 0 && (
+          <p>No bookings for your properties yet.</p>
+        )}
       </ul>
     </div>
   );

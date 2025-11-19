@@ -8,6 +8,7 @@ import {
   onSnapshot,
   updateDoc,
   doc,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
@@ -17,6 +18,7 @@ const MedicalCustomer = () => {
   const [symptoms, setSymptoms] = useState('');
   const [preferredTime, setPreferredTime] = useState('');
   const [consultations, setConsultations] = useState([]);
+  const [doctorProfiles, setDoctorProfiles] = useState({});
 
   useEffect(() => {
     if (!user) return;
@@ -29,6 +31,39 @@ const MedicalCustomer = () => {
     });
     return () => unsub();
   }, [user]);
+
+  // Load doctor names & phone numbers
+  useEffect(() => {
+    const loadDoctors = async () => {
+      const ids = Array.from(
+        new Set(
+          consultations
+            .map((c) => c.doctorId)
+            .filter(Boolean)
+        )
+      );
+
+      for (const id of ids) {
+        if (doctorProfiles[id]) continue;
+        try {
+          const snap = await getDoc(doc(db, 'users', id));
+          if (snap.exists()) {
+            const data = snap.data();
+            setDoctorProfiles((prev) => ({
+              ...prev,
+              [id]: data,
+            }));
+          }
+        } catch (err) {
+          console.error('Failed to fetch doctor profile', err);
+        }
+      }
+    };
+
+    if (consultations.length > 0) {
+      loadDoctors();
+    }
+  }, [consultations, doctorProfiles]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -60,7 +95,15 @@ const MedicalCustomer = () => {
     <div>
       <h1>Medical Consultation (Customer)</h1>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '400px' }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          maxWidth: '400px',
+        }}
+      >
         <label>
           Describe your symptoms
           <textarea
@@ -84,23 +127,44 @@ const MedicalCustomer = () => {
 
       <h2>Your consultations</h2>
       <ul>
-        {consultations.map((c) => (
-          <li key={c.id} style={{ marginBottom: '8px' }}>
-            Symptoms: {c.symptoms.slice(0, 60)}... | Status: {c.status}{' '}
-            {c.doctorId && <span>| Doctor: {c.doctorId}</span>}
-            {c.prescription && (
-              <div>Prescription: {c.prescription}</div>
-            )}
-            {c.status === 'pending' && (
-              <button
-                onClick={() => cancelConsultation(c)}
-                style={{ marginLeft: '8px' }}
-              >
-                Cancel
-              </button>
-            )}
-          </li>
-        ))}
+        {consultations.map((c) => {
+          const doctor = c.doctorId
+            ? doctorProfiles[c.doctorId]
+            : null;
+          return (
+            <li
+              key={c.id}
+              style={{
+                marginBottom: '8px',
+                padding: '6px',
+                border: '1px solid #ccc',
+              }}
+            >
+              <div>Symptoms: {c.symptoms}</div>
+              <div>Status: {c.status}</div>
+              {doctor && (
+                <div>
+                  Doctor: {doctor.name}
+                  {doctor.phone && ` (Phone: ${doctor.phone})`}
+                </div>
+              )}
+              {c.prescription && (
+                <div>Prescription: {c.prescription}</div>
+              )}
+              {c.status === 'pending' && (
+                <button
+                  onClick={() => cancelConsultation(c)}
+                  style={{ marginTop: '4px' }}
+                >
+                  Cancel
+                </button>
+              )}
+            </li>
+          );
+        })}
+        {consultations.length === 0 && (
+          <p>No consultations yet.</p>
+        )}
       </ul>
     </div>
   );

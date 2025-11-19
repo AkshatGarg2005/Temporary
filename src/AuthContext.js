@@ -8,8 +8,8 @@ const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);       // Firebase user
-  const [profile, setProfile] = useState(null); // Firestore profile (role, name, etc.)
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,22 +17,22 @@ export const AuthProvider = ({ children }) => {
       try {
         if (firebaseUser) {
           setUser(firebaseUser);
-
           const userRef = doc(db, 'users', firebaseUser.uid);
           const snap = await getDoc(userRef);
 
           if (snap.exists()) {
-            // Use existing profile from Register page
             setProfile({ id: snap.id, ...snap.data() });
           } else {
-            // Auto-create a basic profile if missing
             const email = firebaseUser.email || '';
-            const defaultName = firebaseUser.displayName || email.split('@')[0] || 'User';
+            const defaultName =
+              firebaseUser.displayName || email.split('@')[0] || 'User';
 
             const defaultProfile = {
               name: defaultName,
-              email: email,
-              role: 'CUSTOMER',      // default role if created elsewhere
+              email,
+              role: 'CUSTOMER',
+              phone: '',
+              expertiseCategory: '',
               createdAt: serverTimestamp(),
             };
 
@@ -56,7 +56,21 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => signOut(auth);
 
-  const value = { user, profile, loading, logout };
+  const refreshProfile = async () => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+      const userRef = doc(db, 'users', currentUser.uid);
+      const snap = await getDoc(userRef);
+      if (snap.exists()) {
+        setProfile({ id: snap.id, ...snap.data() });
+      }
+    } catch (err) {
+      console.error('Failed to refresh profile', err);
+    }
+  };
+
+  const value = { user, profile, loading, logout, refreshProfile };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

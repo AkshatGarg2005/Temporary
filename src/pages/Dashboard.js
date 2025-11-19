@@ -64,17 +64,6 @@ const Dashboard = () => {
         </>
       )}
 
-      {role === 'ADMIN' && (
-        <>
-          <h2>Admin actions</h2>
-          <ul>
-            <li>
-              <Link to="/services/admin">Manage service-on-rent requests</Link>
-            </li>
-          </ul>
-        </>
-      )}
-
       {role === 'HOST' && (
         <>
           <h2>Host actions</h2>
@@ -124,7 +113,7 @@ const Dashboard = () => {
           <h2>Worker actions</h2>
           <ul>
             <li>
-              <Link to="/services/worker">Assigned service jobs</Link>
+              <Link to="/services/worker">Service jobs</Link>
             </li>
           </ul>
         </>

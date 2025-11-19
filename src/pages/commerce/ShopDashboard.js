@@ -8,7 +8,6 @@ import {
   onSnapshot,
   updateDoc,
   doc,
-  orderBy,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
@@ -36,8 +35,7 @@ const ShopDashboard = () => {
 
     const qOrders = query(
       collection(db, 'commerceOrders'),
-      where('shopId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('shopId', '==', user.uid)
     );
     const unsubOrders = onSnapshot(qOrders, (snapshot) => {
       setOrders(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -150,50 +148,68 @@ const ShopDashboard = () => {
             </button>
           </li>
         ))}
+        {products.length === 0 && <p>No products yet.</p>}
       </ul>
 
       <h2>Orders to fulfill</h2>
       <ul>
-        {orders.map((o) => (
-          <li
-            key={o.id}
-            style={{
-              marginBottom: '8px',
-              padding: '6px',
-              border: '1px solid #ccc',
-            }}
-          >
-            <div>Customer: {o.customerId}</div>
-            <div>Address: {o.address}</div>
-            <div>Product: {o.productId}</div>
-            <div>Quantity: {o.quantity}</div>
-            <div>Status: {o.status}</div>
-            <div style={{ marginTop: '4px' }}>
-              {o.status === 'pending' && (
-                <>
-                  <button onClick={() => updateOrderStatus(o, 'accepted')}>
-                    Accept
-                  </button>
+        {orders.map((o) => {
+          const product = products.find((p) => p.id === o.productId);
+          return (
+            <li
+              key={o.id}
+              style={{
+                marginBottom: '8px',
+                padding: '6px',
+                border: '1px solid #ccc',
+              }}
+            >
+              <div>Order ID: {o.id}</div>
+              <div>
+                Product:{' '}
+                {product ? product.name : o.productId}
+              </div>
+              <div>Quantity: {o.quantity}</div>
+              <div>Customer: {o.customerId}</div>
+              <div>Address: {o.address}</div>
+              <div>Status: {o.status}</div>
+              <div style={{ marginTop: '4px' }}>
+                {o.status === 'pending' && (
+                  <>
+                    <button
+                      onClick={() =>
+                        updateOrderStatus(o, 'accepted')
+                      }
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() =>
+                        updateOrderStatus(o, 'rejected')
+                      }
+                      style={{ marginLeft: '8px' }}
+                    >
+                      Reject
+                    </button>
+                  </>
+                )}
+                {o.status === 'accepted' && (
                   <button
-                    onClick={() => updateOrderStatus(o, 'rejected')}
-                    style={{ marginLeft: '8px' }}
+                    onClick={() =>
+                      updateOrderStatus(
+                        o,
+                        'ready_for_delivery'
+                      )
+                    }
                   >
-                    Reject
+                    Mark ready for delivery
                   </button>
-                </>
-              )}
-              {o.status === 'accepted' && (
-                <button
-                  onClick={() =>
-                    updateOrderStatus(o, 'ready_for_delivery')
-                  }
-                >
-                  Mark ready for delivery
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
+                )}
+              </div>
+            </li>
+          );
+        })}
+        {orders.length === 0 && <p>No orders yet.</p>}
       </ul>
     </div>
   );

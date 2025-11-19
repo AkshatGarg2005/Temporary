@@ -4,12 +4,15 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { ROLE_OPTIONS } from '../../roles';
+import { SERVICE_CATEGORIES } from '../../serviceCategories';
 
 const Register = () => {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [role, setRole] = useState('CUSTOMER');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [expertiseCategory, setExpertiseCategory] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -21,11 +24,22 @@ const Register = () => {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       const uid = cred.user.uid;
 
-      await setDoc(doc(db, 'users', uid), {
+      const baseProfile = {
         name,
         email,
         role,
+        phone,
         createdAt: serverTimestamp(),
+      };
+
+      const extraFields =
+        role === 'WORKER'
+          ? { expertiseCategory: expertiseCategory }
+          : { expertiseCategory: '' };
+
+      await setDoc(doc(db, 'users', uid), {
+        ...baseProfile,
+        ...extraFields,
       });
 
       navigate('/');
@@ -38,7 +52,15 @@ const Register = () => {
   return (
     <div>
       <h1>Register</h1>
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '300px' }}>
+      <form
+        onSubmit={onSubmit}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          maxWidth: '320px',
+        }}
+      >
         <label>
           Name
           <input
@@ -68,6 +90,34 @@ const Register = () => {
             onChange={(e) => setEmail(e.target.value)}
           />
         </label>
+
+        <label>
+          Mobile number
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="e.g. 9876543210"
+          />
+        </label>
+
+        {role === 'WORKER' && (
+          <label>
+            Expertise category
+            <select
+              value={expertiseCategory}
+              onChange={(e) => setExpertiseCategory(e.target.value)}
+              required
+            >
+              <option value="">Select category</option>
+              {SERVICE_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label>
           Password

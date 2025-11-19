@@ -16,7 +16,6 @@ import CustomerCab from './pages/cab/CustomerCab';
 import DriverCab from './pages/cab/DriverCab';
 
 import CustomerServiceRequest from './pages/services/CustomerServiceRequest';
-import AdminServiceDashboard from './pages/services/AdminServiceDashboard';
 import WorkerDashboard from './pages/services/WorkerDashboard';
 
 import HostProperties from './pages/housing/HostProperties';
@@ -28,6 +27,8 @@ import DoctorDashboard from './pages/medical/DoctorDashboard';
 import CustomerCommerce from './pages/commerce/CustomerCommerce';
 import ShopDashboard from './pages/commerce/ShopDashboard';
 import DeliveryDashboard from './pages/commerce/DeliveryDashboard';
+
+import UserProfile from './pages/Profile/UserProfile';
 
 const RequireAuth = ({ children, allowedRoles }) => {
   const { user, profile, loading } = useAuth();
@@ -64,6 +65,7 @@ const AppInner = () => {
           {!user && <Link to="/register">Register</Link>}
           {user && (
             <>
+              <Link to="/profile">My Profile</Link>
               <span>
                 {profile
                   ? `Logged in as: ${profile.name} (${profile.role})`
@@ -90,6 +92,16 @@ const AppInner = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
+          {/* Profile */}
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <UserProfile />
+              </RequireAuth>
+            }
+          />
+
           {/* Cab */}
           <Route
             path="/cab/customer"
@@ -114,14 +126,6 @@ const AppInner = () => {
             element={
               <RequireAuth allowedRoles={['CUSTOMER']}>
                 <CustomerServiceRequest />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/services/admin"
-            element={
-              <RequireAuth allowedRoles={['ADMIN']}>
-                <AdminServiceDashboard />
               </RequireAuth>
             }
           />

@@ -11,10 +11,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
+import { SERVICE_CATEGORIES } from '../../serviceCategories';
 
 const CustomerServiceRequest = () => {
   const { user } = useAuth();
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(
+    SERVICE_CATEGORIES[0] || ''
+  );
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
@@ -42,22 +45,41 @@ const CustomerServiceRequest = () => {
       description,
       address,
       scheduledTime: scheduledTime || null,
-      status: 'pending', // pending, assigned, completed, cancelled, rejected
+      status: 'pending', // pending, quoted, accepted, completed, cancelled
       workerId: null,
-      basePrice: null,
+      proposedPrice: null,
+      proposedByWorkerId: null,
       createdAt: serverTimestamp(),
     });
 
-    setCategory('');
     setDescription('');
     setAddress('');
     setScheduledTime('');
   };
 
-  const cancelRequest = async (id, status) => {
-    if (status !== 'pending' && status !== 'assigned') return;
-    await updateDoc(doc(db, 'serviceRequests', id), {
+  const cancelRequest = async (request) => {
+    if (
+      request.status !== 'pending' &&
+      request.status !== 'quoted'
+    ) {
+      return;
+    }
+    await updateDoc(doc(db, 'serviceRequests', request.id), {
       status: 'cancelled',
+    });
+  };
+
+  const acceptQuote = async (request) => {
+    if (
+      request.status !== 'quoted' ||
+      !request.proposedByWorkerId ||
+      typeof request.proposedPrice !== 'number'
+    ) {
+      return;
+    }
+    await updateDoc(doc(db, 'serviceRequests', request.id), {
+      status: 'accepted',
+      workerId: request.proposedByWorkerId,
     });
   };
 
@@ -65,14 +87,28 @@ const CustomerServiceRequest = () => {
     <div>
       <h1>Service on Rent (Customer)</h1>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '400px' }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          maxWidth: '400px',
+        }}
+      >
         <label>
-          Category (plumber, electrician, etc.)
-          <input
+          Category
+          <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             required
-          />
+          >
+            {SERVICE_CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label>
@@ -108,16 +144,35 @@ const CustomerServiceRequest = () => {
       <h2>Your service requests</h2>
       <ul>
         {requests.map((r) => (
-          <li key={r.id} style={{ marginBottom: '8px' }}>
-            [{r.category}] {r.description.slice(0, 60)}... | Status: {r.status}{' '}
-            {r.workerId && <span>| Worker: {r.workerId}</span>}
-            {typeof r.basePrice === 'number' && (
-              <span> | Base price: ₹{r.basePrice}</span>
+          <li
+            key={r.id}
+            style={{
+              marginBottom: '8px',
+              padding: '6px',
+              border: '1px solid #ccc',
+            }}
+          >
+            <div>
+              <strong>{r.category}</strong> | Status: {r.status}
+            </div>
+            <div>{r.description}</div>
+            {typeof r.proposedPrice === 'number' && (
+              <div>Worker quote: ₹{r.proposedPrice}</div>
             )}
-            {(r.status === 'pending' || r.status === 'assigned') && (
+            {r.status === 'quoted' &&
+              r.proposedByWorkerId &&
+              typeof r.proposedPrice === 'number' && (
+                <button
+                  onClick={() => acceptQuote(r)}
+                  style={{ marginRight: '8px', marginTop: '4px' }}
+                >
+                  Accept quote
+                </button>
+              )}
+            {(r.status === 'pending' || r.status === 'quoted') && (
               <button
-                onClick={() => cancelRequest(r.id, r.status)}
-                style={{ marginLeft: '8px' }}
+                onClick={() => cancelRequest(r)}
+                style={{ marginTop: '4px' }}
               >
                 Cancel
               </button>
