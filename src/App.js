@@ -30,6 +30,7 @@ import DeliveryDashboard from './pages/commerce/DeliveryDashboard';
 
 import UserProfile from './pages/Profile/UserProfile';
 import CustomerOrders from './pages/orders/CustomerOrders';
+import LandingPage from './pages/LandingPage';
 
 const RequireAuth = ({ children, allowedRoles }) => {
   const { user, profile, loading } = useAuth();
@@ -52,6 +53,11 @@ const RequireAuth = ({ children, allowedRoles }) => {
   }
 
   return children;
+};
+
+const HomeRoute = () => {
+  const { user } = useAuth();
+  return user ? <Dashboard /> : <LandingPage />;
 };
 
 const AppInner = () => {
@@ -81,14 +87,8 @@ const AppInner = () => {
 
       <main style={{ padding: '16px' }}>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <RequireAuth>
-                <Dashboard />
-              </RequireAuth>
-            }
-          />
+          {/* Landing or dashboard depending on auth */}
+          <Route path="/" element={<HomeRoute />} />
 
           {/* Auth */}
           <Route path="/login" element={<Login />} />
@@ -155,7 +155,7 @@ const AppInner = () => {
             path="/housing/host"
             element={
               <RequireAuth allowedRoles={['HOST']}>
-                HostProperties />
+                <HostProperties />
               </RequireAuth>
             }
           />

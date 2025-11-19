@@ -8,6 +8,7 @@ const UserProfile = () => {
   const { user, profile, loading, refreshProfile } = useAuth();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [expertiseCategory, setExpertiseCategory] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -16,6 +17,7 @@ const UserProfile = () => {
     if (profile) {
       setName(profile.name || '');
       setPhone(profile.phone || '');
+      setAddress(profile.address || '');
       setExpertiseCategory(profile.expertiseCategory || '');
     }
   }, [profile]);
@@ -37,6 +39,7 @@ const UserProfile = () => {
       const updateData = {
         name,
         phone,
+        address,
       };
 
       if (profile.role === 'WORKER') {
@@ -84,6 +87,15 @@ const UserProfile = () => {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="e.g. 9876543210"
+          />
+        </label>
+
+        <label>
+          Address
+          <textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Your default address"
           />
         </label>
 

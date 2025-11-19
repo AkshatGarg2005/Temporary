@@ -12,6 +12,7 @@ const Register = () => {
   const [role, setRole] = useState('CUSTOMER');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [expertiseCategory, setExpertiseCategory] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -29,6 +30,7 @@ const Register = () => {
         email,
         role,
         phone,
+        address,
         createdAt: serverTimestamp(),
       };
 
@@ -98,6 +100,15 @@ const Register = () => {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="e.g. 9876543210"
+          />
+        </label>
+
+        <label>
+          Address
+          <textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Your default address"
           />
         </label>
 

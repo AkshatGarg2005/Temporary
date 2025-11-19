@@ -16,6 +16,7 @@ const DeliveryDashboard = () => {
   const [availableOrders, setAvailableOrders] = useState([]);
   const [myOrders, setMyOrders] = useState([]);
   const [customerProfiles, setCustomerProfiles] = useState({});
+  const [shopProfiles, setShopProfiles] = useState({});
 
   useEffect(() => {
     if (!user) return;
@@ -46,29 +47,49 @@ const DeliveryDashboard = () => {
   }, [user]);
 
   useEffect(() => {
-    const loadCustomers = async () => {
+    const loadProfiles = async () => {
       const allOrders = [...availableOrders, ...myOrders];
-      const ids = Array.from(
+
+      const customerIds = Array.from(
         new Set(allOrders.map((o) => o.customerId).filter(Boolean))
       );
-      const profiles = {};
-      for (const id of ids) {
+      const shopIds = Array.from(
+        new Set(allOrders.map((o) => o.shopId).filter(Boolean))
+      );
+
+      const customerMap = {};
+      for (const id of customerIds) {
         try {
           const snap = await getDoc(doc(db, 'users', id));
           if (snap.exists()) {
-            profiles[id] = snap.data();
+            customerMap[id] = snap.data();
           }
         } catch (err) {
           console.error('Failed to fetch customer profile', err);
         }
       }
-      setCustomerProfiles(profiles);
+
+      const shopMap = {};
+      for (const id of shopIds) {
+        try {
+          const snap = await getDoc(doc(db, 'users', id));
+          if (snap.exists()) {
+            shopMap[id] = snap.data();
+          }
+        } catch (err) {
+          console.error('Failed to fetch shop profile', err);
+        }
+      }
+
+      setCustomerProfiles(customerMap);
+      setShopProfiles(shopMap);
     };
 
     if (availableOrders.length > 0 || myOrders.length > 0) {
-      loadCustomers();
+      loadProfiles();
     } else {
       setCustomerProfiles({});
+      setShopProfiles({});
     }
   }, [availableOrders, myOrders]);
 
@@ -94,6 +115,7 @@ const DeliveryDashboard = () => {
       <ul>
         {availableOrders.map((o) => {
           const customer = customerProfiles[o.customerId];
+          const shop = shopProfiles[o.shopId];
           return (
             <li
               key={o.id}
@@ -105,11 +127,18 @@ const DeliveryDashboard = () => {
             >
               <div>Order: {o.id}</div>
               <div>
+                Shop:{' '}
+                {shop ? shop.name : o.shopId}
+                {shop?.address && ` | Address: ${shop.address}`}
+              </div>
+              <div>Pickup from shop above</div>
+              <div>
                 Customer:{' '}
                 {customer ? customer.name : o.customerId}
+                {customer?.phone &&
+                  ` (Phone: ${customer.phone})`}
               </div>
-              <div>Shop: {o.shopId}</div>
-              <div>Address: {o.address}</div>
+              <div>Delivery address: {o.address}</div>
               <button onClick={() => acceptDelivery(o)}>
                 Accept delivery
               </button>
@@ -125,6 +154,7 @@ const DeliveryDashboard = () => {
       <ul>
         {myOrders.map((o) => {
           const customer = customerProfiles[o.customerId];
+          const shop = shopProfiles[o.shopId];
           return (
             <li
               key={o.id}
@@ -136,13 +166,18 @@ const DeliveryDashboard = () => {
             >
               <div>Order: {o.id}</div>
               <div>Status: {o.status}</div>
-              <div>Address: {o.address}</div>
+              <div>
+                Shop:{' '}
+                {shop ? shop.name : o.shopId}
+                {shop?.address && ` | Address: ${shop.address}`}
+              </div>
               <div>
                 Customer:{' '}
                 {customer ? customer.name : o.customerId}
                 {customer?.phone &&
                   ` (Phone: ${customer.phone})`}
               </div>
+              <div>Delivery address: {o.address}</div>
               {o.status === 'out_for_delivery' && (
                 <button onClick={() => markDelivered(o)}>
                   Mark delivered

@@ -6,23 +6,30 @@ import {
   onSnapshot,
   addDoc,
   serverTimestamp,
-  getDoc,
-  doc,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
 
 const CustomerCommerce = () => {
   const { user } = useAuth();
+  const [shops, setShops] = useState([]);
   const [products, setProducts] = useState([]);
+  const [selectedShop, setSelectedShop] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [address, setAddress] = useState('');
-  const [orders, setOrders] = useState([]);
-  const [shopProfiles, setShopProfiles] = useState({});
-  const [deliveryProfiles, setDeliveryProfiles] = useState({});
 
   useEffect(() => {
+    // All shops
+    const qShops = query(
+      collection(db, 'users'),
+      where('role', '==', 'SHOP')
+    );
+    const unsubShops = onSnapshot(qShops, (snapshot) => {
+      setShops(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    // Products from all shops (we filter by shopId in UI)
     const qProducts = query(
       collection(db, 'products'),
       where('isAvailable', '==', true)
@@ -30,77 +37,16 @@ const CustomerCommerce = () => {
     const unsubProducts = onSnapshot(qProducts, (snapshot) => {
       setProducts(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => unsubProducts();
+
+    return () => {
+      unsubShops();
+      unsubProducts();
+    };
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    const qOrders = query(
-      collection(db, 'commerceOrders'),
-      where('customerId', '==', user.uid)
-    );
-    const unsubOrders = onSnapshot(qOrders, (snapshot) => {
-      setOrders(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsubOrders();
-  }, [user]);
-
-  useEffect(() => {
-    const loadShops = async () => {
-      const shopIds = new Set([
-        ...products.map((p) => p.shopId),
-        ...orders.map((o) => o.shopId),
-      ].filter(Boolean));
-      const profiles = {};
-      for (const id of shopIds) {
-        try {
-          const snap = await getDoc(doc(db, 'users', id));
-          if (snap.exists()) {
-            profiles[id] = snap.data();
-          }
-        } catch (err) {
-          console.error('Failed to fetch shop profile', err);
-        }
-      }
-      setShopProfiles(profiles);
-    };
-
-    if (products.length > 0 || orders.length > 0) {
-      loadShops();
-    } else {
-      setShopProfiles({});
-    }
-  }, [products, orders]);
-
-  useEffect(() => {
-    const loadDeliveryPartners = async () => {
-      const ids = Array.from(
-        new Set(
-          orders
-            .map((o) => o.deliveryPartnerId)
-            .filter(Boolean)
-        )
-      );
-      const profiles = {};
-      for (const id of ids) {
-        try {
-          const snap = await getDoc(doc(db, 'users', id));
-          if (snap.exists()) {
-            profiles[id] = snap.data();
-          }
-        } catch (err) {
-          console.error('Failed to fetch delivery profile', err);
-        }
-      }
-      setDeliveryProfiles(profiles);
-    };
-
-    if (orders.length > 0) {
-      loadDeliveryPartners();
-    } else {
-      setDeliveryProfiles({});
-    }
-  }, [orders]);
+  const shopProducts = selectedShop
+    ? products.filter((p) => p.shopId === selectedShop.id)
+    : [];
 
   const placeOrder = async (e) => {
     e.preventDefault();
@@ -111,7 +57,7 @@ const CustomerCommerce = () => {
       shopId: selectedProduct.shopId,
       productId: selectedProduct.id,
       quantity: parseInt(quantity, 10),
-      status: 'pending', // pending, accepted, rejected, ready_for_delivery, out_for_delivery, delivered
+      status: 'pending',
       deliveryPartnerId: null,
       address,
       createdAt: serverTimestamp(),
@@ -124,37 +70,55 @@ const CustomerCommerce = () => {
   return (
     <div>
       <h1>Quick Commerce (Customer)</h1>
+      <p>Your order history is available in the "My Orders" page.</p>
 
-      <h2>Available products</h2>
-      <p>
-        Each product may be listed from multiple shops with different prices.
-        Choose the shop you want.
-      </p>
+      <h2>Shops</h2>
       <ul>
-        {products.map((p) => {
-          const shop = shopProfiles[p.shopId];
-          return (
-            <li key={p.id} style={{ marginBottom: '6px' }}>
-              <div>
-                <strong>{p.name}</strong> ({p.category}) | ₹{p.price}
-              </div>
-              <div>
-                Shop:{' '}
-                {shop ? shop.name : p.shopId}
-                {shop?.phone && ` (Phone: ${shop.phone})`}
-              </div>
-              {p.stock != null && <div>Stock: {p.stock}</div>}
-              <button
-                onClick={() => setSelectedProduct(p)}
-                style={{ marginTop: '4px' }}
-              >
-                Select this shop
-              </button>
-            </li>
-          );
-        })}
-        {products.length === 0 && <p>No products available.</p>}
+        {shops.map((s) => (
+          <li key={s.id} style={{ marginBottom: '6px' }}>
+            <div>
+              <strong>{s.name}</strong>
+            </div>
+            {s.address && <div>Address: {s.address}</div>}
+            {s.phone && <div>Phone: {s.phone}</div>}
+            <button
+              onClick={() => {
+                setSelectedShop(s);
+                setSelectedProduct(null);
+              }}
+              style={{ marginTop: '4px' }}
+            >
+              View products
+            </button>
+          </li>
+        ))}
+        {shops.length === 0 && <p>No shops found.</p>}
       </ul>
+
+      {selectedShop && (
+        <div style={{ marginTop: '16px' }}>
+          <h2>Products from {selectedShop.name}</h2>
+          <ul>
+            {shopProducts.map((p) => (
+              <li key={p.id} style={{ marginBottom: '6px' }}>
+                <div>
+                  <strong>{p.name}</strong> ({p.category}) | ₹{p.price}
+                </div>
+                {p.stock != null && <div>Stock: {p.stock}</div>}
+                <button
+                  onClick={() => setSelectedProduct(p)}
+                  style={{ marginTop: '4px' }}
+                >
+                  Select product
+                </button>
+              </li>
+            ))}
+            {shopProducts.length === 0 && (
+              <p>No products for this shop.</p>
+            )}
+          </ul>
+        </div>
+      )}
 
       {selectedProduct && (
         <div style={{ marginTop: '16px' }}>
@@ -192,46 +156,6 @@ const CustomerCommerce = () => {
           </form>
         </div>
       )}
-
-      <h2>Your commerce orders</h2>
-      <ul>
-        {orders.map((o) => {
-          const product = products.find((p) => p.id === o.productId);
-          const shop = shopProfiles[o.shopId];
-          const delivery =
-            o.deliveryPartnerId &&
-            o.status !== 'delivered'
-              ? deliveryProfiles[o.deliveryPartnerId]
-              : null;
-
-          return (
-            <li
-              key={o.id}
-              style={{ marginBottom: '6px', padding: '6px', border: '1px solid #ccc' }}
-            >
-              <div>
-                Product:{' '}
-                {product ? product.name : o.productId} | Qty:{' '}
-                {o.quantity}
-              </div>
-              <div>
-                Shop:{' '}
-                {shop ? shop.name : o.shopId}
-                {shop?.phone && ` (Phone: ${shop.phone})`}
-              </div>
-              <div>Status: {o.status}</div>
-              <div>Address: {o.address}</div>
-              {delivery && (
-                <div>
-                  Delivery partner: {delivery.name}
-                  {delivery.phone && ` (Phone: ${delivery.phone})`}
-                </div>
-              )}
-            </li>
-          );
-        })}
-        {orders.length === 0 && <p>No orders yet.</p>}
-      </ul>
     </div>
   );
 };

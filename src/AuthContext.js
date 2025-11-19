@@ -32,6 +32,7 @@ export const AuthProvider = ({ children }) => {
               email,
               role: 'CUSTOMER',
               phone: '',
+              address: '',
               expertiseCategory: '',
               createdAt: serverTimestamp(),
             };

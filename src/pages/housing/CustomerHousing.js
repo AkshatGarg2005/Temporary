@@ -6,9 +6,6 @@ import {
   onSnapshot,
   addDoc,
   serverTimestamp,
-  updateDoc,
-  doc,
-  getDoc,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
@@ -17,11 +14,9 @@ const CustomerHousing = () => {
   const { user } = useAuth();
   const [properties, setProperties] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
-  const [stayType, setStayType] = useState('DAY'); // DAY, LONG_TERM
+  const [stayType, setStayType] = useState('DAY');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [bookings, setBookings] = useState([]);
-  const [hostProfiles, setHostProfiles] = useState({});
 
   useEffect(() => {
     const q = query(
@@ -34,48 +29,6 @@ const CustomerHousing = () => {
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    const q = query(
-      collection(db, 'bookings'),
-      where('customerId', '==', user.uid)
-    );
-    const unsub = onSnapshot(q, (snapshot) => {
-      setBookings(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
-  }, [user]);
-
-  useEffect(() => {
-    const loadHosts = async () => {
-      const ids = Array.from(
-        new Set(
-          bookings
-            .map((b) => b.hostId)
-            .filter(Boolean)
-        )
-      );
-      const profiles = {};
-      for (const id of ids) {
-        try {
-          const snap = await getDoc(doc(db, 'users', id));
-          if (snap.exists()) {
-            profiles[id] = snap.data();
-          }
-        } catch (err) {
-          console.error('Failed to fetch host profile', err);
-        }
-      }
-      setHostProfiles(profiles);
-    };
-
-    if (bookings.length > 0) {
-      loadHosts();
-    } else {
-      setHostProfiles({});
-    }
-  }, [bookings]);
-
   const bookProperty = async (e) => {
     e.preventDefault();
     if (!selectedProperty || !startDate) return;
@@ -87,7 +40,7 @@ const CustomerHousing = () => {
       stayType,
       startDate,
       endDate: stayType === 'DAY' ? endDate || startDate : endDate || null,
-      status: 'pending', // pending, confirmed, cancelled
+      status: 'pending',
       createdAt: serverTimestamp(),
     });
 
@@ -95,18 +48,10 @@ const CustomerHousing = () => {
     setEndDate('');
   };
 
-  const cancelBooking = async (booking) => {
-    if (booking.status !== 'pending' && booking.status !== 'confirmed') {
-      return;
-    }
-    await updateDoc(doc(db, 'bookings', booking.id), {
-      status: 'cancelled',
-    });
-  };
-
   return (
     <div>
       <h1>Housing (Customer)</h1>
+      <p>Your house bookings are available in the "My Orders" page.</p>
 
       <h2>Available properties</h2>
       <ul>
@@ -191,42 +136,6 @@ const CustomerHousing = () => {
           </form>
         </div>
       )}
-
-      <h2>Your bookings</h2>
-      <ul>
-        {bookings.map((b) => {
-          const property = properties.find((p) => p.id === b.propertyId);
-          const host = b.status === 'confirmed'
-            ? hostProfiles[b.hostId]
-            : null;
-
-          return (
-            <li key={b.id} style={{ marginBottom: '8px' }}>
-              {property ? property.title : b.propertyId} | {b.stayType}{' '}
-              | {b.startDate}
-              {b.endDate && b.endDate !== b.startDate && ` → ${b.endDate}`}{' '}
-              | Status: {b.status}
-              {host && (
-                <div>
-                  Host: {host.name}
-                  {host.phone && ` (Phone: ${host.phone})`}
-                </div>
-              )}
-              {(b.status === 'pending' || b.status === 'confirmed') && (
-                <button
-                  onClick={() => cancelBooking(b)}
-                  style={{ marginLeft: '8px' }}
-                >
-                  Cancel
-                </button>
-              )}
-            </li>
-          );
-        })}
-        {bookings.length === 0 && (
-          <p>No bookings yet.</p>
-        )}
-      </ul>
     </div>
   );
 };
