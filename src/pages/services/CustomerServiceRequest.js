@@ -9,40 +9,66 @@ import { useAuth } from '../../AuthContext';
 import { SERVICE_CATEGORIES } from '../../serviceCategories';
 
 const CustomerServiceRequest = () => {
-  const { user } = useAuth();
+  const { user, profile, loading } = useAuth();
   const [category, setCategory] = useState(
     SERVICE_CATEGORIES[0] || ''
   );
   const [description, setDescription] = useState('');
-  const [address, setAddress] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
+  const [error, setError] = useState('');
+
+  if (loading || !profile) {
+    return <div>Loading...</div>;
+  }
+
+  const savedAddress = profile.address || '';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!category || !description || !address) return;
+    setError('');
 
-    await addDoc(collection(db, 'serviceRequests'), {
-      customerId: user.uid,
-      category,
-      description,
-      address,
-      scheduledTime: scheduledTime || null,
-      status: 'pending',
-      workerId: null,
-      proposedPrice: null,
-      proposedByWorkerId: null,
-      createdAt: serverTimestamp(),
-    });
+    if (!category || !description) return;
 
-    setDescription('');
-    setAddress('');
-    setScheduledTime('');
+    if (!savedAddress) {
+      setError(
+        'Please set your address in My Profile before creating a service request.'
+      );
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'serviceRequests'), {
+        customerId: user.uid,
+        category,
+        description,
+        address: savedAddress,
+        scheduledTime: scheduledTime || null,
+        status: 'pending', // pending, quoted, accepted, completed, cancelled
+        workerId: null,
+        proposedPrice: null,
+        proposedByWorkerId: null,
+        createdAt: serverTimestamp(),
+      });
+
+      setDescription('');
+      setScheduledTime('');
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Failed to create service request');
+    }
   };
 
   return (
     <div>
       <h1>Service on Rent (Customer)</h1>
       <p>Your service requests are available in the "My Orders" page.</p>
+
+      <p>
+        <strong>Using your saved address:</strong>{' '}
+        {savedAddress
+          ? savedAddress
+          : 'No address set. Go to "My Profile" and set your address.'}
+      </p>
 
       <form
         onSubmit={handleSubmit}
@@ -78,15 +104,6 @@ const CustomerServiceRequest = () => {
         </label>
 
         <label>
-          Address
-          <textarea
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            required
-          />
-        </label>
-
-        <label>
           Preferred time (optional)
           <input
             type="datetime-local"
@@ -95,8 +112,17 @@ const CustomerServiceRequest = () => {
           />
         </label>
 
-        <button type="submit">Create service request</button>
+        <button
+          type="submit"
+          disabled={!savedAddress}
+        >
+          Create service request
+        </button>
       </form>
+
+      {error && (
+        <p style={{ color: 'red', marginTop: '8px' }}>{error}</p>
+      )}
     </div>
   );
 };
