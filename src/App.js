@@ -32,6 +32,7 @@ import CommerceCart from './pages/commerce/CommerceCart';
 import UserProfile from './pages/Profile/UserProfile';
 import CustomerOrders from './pages/orders/CustomerOrders';
 import LandingPage from './pages/LandingPage';
+import AiAssistant from './pages/assistant/AiAssistant';
 
 const RequireAuth = ({ children, allowedRoles }) => {
   const { user, profile, loading } = useAuth();
@@ -76,6 +77,7 @@ const AppInner = () => {
               <Link to="/profile">My Profile</Link>
               <Link to="/commerce/cart">Cart</Link>
               <Link to="/orders">My Orders</Link>
+              <Link to="/assistant">AI Assistant</Link>
               <span>
                 {profile
                   ? `Logged in as: ${profile.name} (${profile.role})`
@@ -112,6 +114,16 @@ const AppInner = () => {
             element={
               <RequireAuth allowedRoles={['CUSTOMER']}>
                 <CustomerOrders />
+              </RequireAuth>
+            }
+          />
+
+          {/* AI Assistant */}
+          <Route
+            path="/assistant"
+            element={
+              <RequireAuth allowedRoles={['CUSTOMER']}>
+                <AiAssistant />
               </RequireAuth>
             }
           />
