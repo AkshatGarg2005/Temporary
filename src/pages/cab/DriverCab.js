@@ -11,23 +11,44 @@ import {
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
 
+import ChatWindow from '../../components/ChatWindow';
+
 const DriverCab = () => {
   const { user } = useAuth();
   const [pendingRequests, setPendingRequests] = useState([]);
   const [myRides, setMyRides] = useState([]);
+  const [quotes, setQuotes] = useState({});
   const [customerProfiles, setCustomerProfiles] = useState({});
+  const [activeChatRequestId, setActiveChatRequestId] = useState(null);
 
   useEffect(() => {
     if (!user) return;
 
+    // We want pending requests OR requests quoted by THIS driver
+    // Firestore "OR" queries can be tricky, so we might just listen to all non-completed/accepted?
+    // Or just listen to 'pending' and 'quoted' separately or together if index allows.
+    // For simplicity, let's listen to all requests that are NOT accepted/completed/cancelled?
+    // Or just listen to 'pending' ones + 'quoted' ones where driverId matches?
+    // Let's stick to the pattern in WorkerDashboard:
+    // 1. Query for pending (everyone sees these)
+    // 2. Query for quoted (but we need to filter client-side or complex query)
+
+    // Actually, WorkerDashboard filters client-side from a category query.
+    // Here we don't have a category. We probably want to see ALL pending requests.
+
     const qPending = query(
       collection(db, 'cabRequests'),
-      where('status', '==', 'pending')
+      where('status', 'in', ['pending', 'quoted'])
     );
+
     const unsubPending = onSnapshot(qPending, (snapshot) => {
-      setPendingRequests(
-        snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
-      );
+      const all = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const filtered = all.filter(r => {
+        if (r.status === 'pending') return true;
+        if (r.status === 'quoted' && r.proposedByDriverId === user.uid) return true;
+        return false;
+      });
+      setPendingRequests(filtered);
     });
 
     const qMine = query(
@@ -43,6 +64,24 @@ const DriverCab = () => {
       unsubMine();
     };
   }, [user]);
+
+  const handleQuoteChange = (id, value) => {
+    setQuotes((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const sendQuote = async (request) => {
+    const priceStr = quotes[request.id];
+    // If updating an existing quote and no new value typed, use existing
+    const finalPrice = priceStr ? parseFloat(priceStr) : request.proposedPrice;
+
+    if (!finalPrice || finalPrice <= 0) return;
+
+    await updateDoc(doc(db, 'cabRequests', request.id), {
+      proposedPrice: finalPrice,
+      proposedByDriverId: user.uid,
+      status: 'quoted',
+    });
+  };
 
   useEffect(() => {
     const loadCustomers = async () => {
@@ -74,13 +113,7 @@ const DriverCab = () => {
     }
   }, [myRides]);
 
-  const acceptRequest = async (request) => {
-    if (request.status !== 'pending') return;
-    await updateDoc(doc(db, 'cabRequests', request.id), {
-      status: 'accepted',
-      driverId: user.uid,
-    });
-  };
+
 
   const completeRide = async (request) => {
     if (request.status !== 'accepted') return;
@@ -99,17 +132,34 @@ const DriverCab = () => {
           <li key={r.id} style={{ marginBottom: '8px' }}>
             {r.pickupLocation} → {r.dropLocation}{' '}
             {r.scheduledTime && <span>| Time: {r.scheduledTime}</span>}
-            <button
-              onClick={() => acceptRequest(r)}
-              style={{ marginLeft: '8px' }}
-            >
-              Accept
-            </button>
+            <div style={{ marginTop: '4px' }}>
+              <label>
+                Your price (₹)
+                <input
+                  type="number"
+                  value={quotes[r.id] ?? (r.proposedPrice || '')}
+                  onChange={(e) => handleQuoteChange(r.id, e.target.value)}
+                  style={{ marginLeft: '4px', width: '80px' }}
+                />
+              </label>
+              <button
+                onClick={() => sendQuote(r)}
+                style={{ marginLeft: '8px' }}
+              >
+                {r.status === 'quoted' ? 'Update quote' : 'Send quote'}
+              </button>
+              {r.status === 'quoted' && r.proposedByDriverId === user.uid && (
+                <button
+                  onClick={() => setActiveChatRequestId(r.id)}
+                  style={{ marginLeft: '8px' }}
+                >
+                  Chat
+                </button>
+              )}
+            </div>
           </li>
         ))}
-        {pendingRequests.length === 0 && (
-          <p>No pending cab requests.</p>
-        )}
+        {pendingRequests.length === 0 && <p>No pending cab requests.</p>}
       </ul>
 
       <h2>Your rides</h2>
@@ -131,19 +181,34 @@ const DriverCab = () => {
                     ` (Phone: ${customer.phone})`}
                 </div>
               )}
-              {r.status === 'accepted' && (
-                <button
-                  onClick={() => completeRide(r)}
-                  style={{ marginLeft: '8px' }}
-                >
-                  Mark completed
-                </button>
-              )}
+              <div style={{ marginTop: '4px' }}>
+                {r.status === 'accepted' && (
+                  <button
+                    onClick={() => completeRide(r)}
+                    style={{ marginRight: '8px' }}
+                  >
+                    Mark completed
+                  </button>
+                )}
+                {r.status === 'accepted' && (
+                  <button onClick={() => setActiveChatRequestId(r.id)}>
+                    Chat
+                  </button>
+                )}
+              </div>
             </li>
           );
         })}
         {myRides.length === 0 && <p>No rides yet.</p>}
       </ul>
+
+      {activeChatRequestId && (
+        <ChatWindow
+          requestId={activeChatRequestId}
+          currentUser={user}
+          onClose={() => setActiveChatRequestId(null)}
+        />
+      )}
     </div>
   );
 };

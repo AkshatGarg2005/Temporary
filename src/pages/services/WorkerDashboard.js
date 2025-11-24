@@ -11,12 +11,15 @@ import {
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
 
+import ChatWindow from '../../components/ChatWindow';
+
 const WorkerDashboard = () => {
   const { user, profile } = useAuth();
   const [openRequests, setOpenRequests] = useState([]);
   const [myJobs, setMyJobs] = useState([]);
   const [quotes, setQuotes] = useState({});
   const [customerProfiles, setCustomerProfiles] = useState({});
+  const [activeChatRequestId, setActiveChatRequestId] = useState(null);
 
   const expertiseCategory = profile?.expertiseCategory || '';
 
@@ -55,12 +58,12 @@ const WorkerDashboard = () => {
     };
   }, [user, expertiseCategory]);
 
-  // Load customer profiles for accepted/completed jobs
+  // Load customer profiles for accepted/completed jobs AND open requests
   useEffect(() => {
     const loadProfiles = async () => {
       const ids = Array.from(
         new Set(
-          myJobs
+          [...myJobs, ...openRequests]
             .map((j) => j.customerId)
             .filter(Boolean)
         )
@@ -83,10 +86,10 @@ const WorkerDashboard = () => {
       }
     };
 
-    if (myJobs.length > 0) {
+    if (myJobs.length > 0 || openRequests.length > 0) {
       loadProfiles();
     }
-  }, [myJobs, customerProfiles]);
+  }, [myJobs, openRequests, customerProfiles]);
 
   const handleQuoteChange = (id, value) => {
     setQuotes((prev) => ({ ...prev, [id]: value }));
@@ -130,44 +133,57 @@ const WorkerDashboard = () => {
         <>
           <h2>Open requests for: {expertiseCategory}</h2>
           <ul>
-            {openRequests.map((r) => (
-              <li
-                key={r.id}
-                style={{
-                  marginBottom: '10px',
-                  padding: '8px',
-                  border: '1px solid #ccc',
-                }}
-              >
-                <div>
-                  <strong>{r.category}</strong> | Status: {r.status}
-                </div>
-                <div>Customer ID: {r.customerId}</div>
-                <div>Problem: {r.description}</div>
-                {r.scheduledTime && (
-                  <div>Preferred time: {r.scheduledTime}</div>
-                )}
-                <div style={{ marginTop: '4px' }}>
-                  <label>
-                    Your estimated price (₹)
-                    <input
-                      type="number"
-                      value={quotes[r.id] ?? (r.proposedPrice || '')}
-                      onChange={(e) =>
-                        handleQuoteChange(r.id, e.target.value)
-                      }
-                      style={{ marginLeft: '4px' }}
-                    />
-                  </label>
-                  <button
-                    onClick={() => sendQuote(r)}
-                    style={{ marginLeft: '8px' }}
-                  >
-                    {r.status === 'quoted' ? 'Update quote' : 'Send quote'}
-                  </button>
-                </div>
-              </li>
-            ))}
+            {openRequests.map((r) => {
+              const customer = customerProfiles[r.customerId];
+              return (
+                <li
+                  key={r.id}
+                  style={{
+                    marginBottom: '10px',
+                    padding: '8px',
+                    border: '1px solid #ccc',
+                  }}
+                >
+                  <div>
+                    <strong>{r.category}</strong> | Status: {r.status}
+                  </div>
+                  <div>
+                    Customer: {customer ? customer.name : r.customerId}
+                  </div>
+                  <div>Problem: {r.description}</div>
+                  {r.scheduledTime && (
+                    <div>Preferred time: {r.scheduledTime}</div>
+                  )}
+                  <div style={{ marginTop: '4px' }}>
+                    <label>
+                      Your estimated price (₹)
+                      <input
+                        type="number"
+                        value={quotes[r.id] ?? (r.proposedPrice || '')}
+                        onChange={(e) =>
+                          handleQuoteChange(r.id, e.target.value)
+                        }
+                        style={{ marginLeft: '4px' }}
+                      />
+                    </label>
+                    <button
+                      onClick={() => sendQuote(r)}
+                      style={{ marginLeft: '8px' }}
+                    >
+                      {r.status === 'quoted' ? 'Update quote' : 'Send quote'}
+                    </button>
+                    {r.status === 'quoted' && r.proposedByWorkerId === user.uid && (
+                      <button
+                        onClick={() => setActiveChatRequestId(r.id)}
+                        style={{ marginLeft: '8px' }}
+                      >
+                        Chat
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
             {openRequests.length === 0 && (
               <p>No open requests for your category right now.</p>
             )}
@@ -179,8 +195,8 @@ const WorkerDashboard = () => {
       <ul>
         {myJobs.map((job) => {
           const customer = customerProfiles[job.customerId];
-          const canSeeDetails =
-            job.status === 'accepted' || job.status === 'completed';
+          // Only show details if status is accepted (not completed)
+          const canSeeDetails = job.status === 'accepted';
 
           return (
             <li
@@ -206,19 +222,34 @@ const WorkerDashboard = () => {
                   <div>Address: {job.address}</div>
                 </>
               )}
-              {job.status === 'accepted' && (
-                <button
-                  onClick={() => markCompleted(job)}
-                  style={{ marginTop: '4px' }}
-                >
-                  Mark completed
-                </button>
-              )}
+              <div style={{ marginTop: '4px' }}>
+                {job.status === 'accepted' && (
+                  <button
+                    onClick={() => markCompleted(job)}
+                    style={{ marginRight: '8px' }}
+                  >
+                    Mark completed
+                  </button>
+                )}
+                {job.status === 'accepted' && (
+                  <button onClick={() => setActiveChatRequestId(job.id)}>
+                    Chat
+                  </button>
+                )}
+              </div>
             </li>
           );
         })}
         {myJobs.length === 0 && <p>No accepted jobs yet.</p>}
       </ul>
+
+      {activeChatRequestId && (
+        <ChatWindow
+          requestId={activeChatRequestId}
+          currentUser={user}
+          onClose={() => setActiveChatRequestId(null)}
+        />
+      )}
     </div>
   );
 };

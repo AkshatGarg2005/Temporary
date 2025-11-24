@@ -7,9 +7,12 @@ import {
   updateDoc,
   doc,
   getDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
+
+import ChatWindow from '../../components/ChatWindow';
 
 const CustomerOrders = () => {
   const { user } = useAuth();
@@ -23,8 +26,34 @@ const CustomerOrders = () => {
   const [shopProfiles, setShopProfiles] = useState({});
   const [deliveryProfiles, setDeliveryProfiles] = useState({});
   const [driverProfiles, setDriverProfiles] = useState({});
+  const [workerProfiles, setWorkerProfiles] = useState({});
   const [hostProfiles, setHostProfiles] = useState({});
   const [doctorProfiles, setDoctorProfiles] = useState({});
+
+  const [activeChatRequestId, setActiveChatRequestId] = useState(null);
+
+  // State for editing symptoms
+  const [editingSymptomId, setEditingSymptomId] = useState(null);
+  const [tempSymptomText, setTempSymptomText] = useState('');
+
+  const handlePayConsultation = async (consultation, fee) => {
+    // In a real app, integrate payment gateway here.
+    // For now, just update the lastPaymentDate.
+    if (window.confirm(`Pay consultation fee of ₹${fee}?`)) {
+      await updateDoc(doc(db, 'medicalConsultations', consultation.id), {
+        lastPaymentDate: serverTimestamp(),
+      });
+      alert('Payment successful! You can now chat with the doctor for 24 hours.');
+    }
+  };
+
+  const updateSymptoms = async (consultation, newSymptoms) => {
+    if (!newSymptoms.trim()) return;
+    await updateDoc(doc(db, 'medicalConsultations', consultation.id), {
+      symptoms: newSymptoms,
+    });
+    alert('Symptoms updated!');
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -214,6 +243,36 @@ const CustomerOrders = () => {
     }
   }, [housingBookings]);
 
+  // Workers for service requests
+  useEffect(() => {
+    const loadWorkers = async () => {
+      const ids = Array.from(
+        new Set(
+          serviceRequests
+            .map((s) => s.workerId)
+            .filter(Boolean)
+        )
+      );
+      const profiles = {};
+      for (const id of ids) {
+        try {
+          const snap = await getDoc(doc(db, 'users', id));
+          if (snap.exists()) {
+            profiles[id] = snap.data();
+          }
+        } catch (err) {
+          console.error('Failed to fetch worker profile', err);
+        }
+      }
+      setWorkerProfiles(profiles);
+    };
+    if (serviceRequests.length > 0) {
+      loadWorkers();
+    } else {
+      setWorkerProfiles({});
+    }
+  }, [serviceRequests]);
+
   // Doctors for consultations
   useEffect(() => {
     const loadDoctors = async () => {
@@ -247,9 +306,23 @@ const CustomerOrders = () => {
   // Actions
 
   const cancelCab = async (c) => {
-    if (c.status !== 'pending') return;
+    if (c.status !== 'pending' && c.status !== 'quoted') return;
     await updateDoc(doc(db, 'cabRequests', c.id), {
       status: 'cancelled',
+    });
+  };
+
+  const acceptCabQuote = async (c) => {
+    if (
+      c.status !== 'quoted' ||
+      !c.proposedByDriverId ||
+      typeof c.proposedPrice !== 'number'
+    ) {
+      return;
+    }
+    await updateDoc(doc(db, 'cabRequests', c.id), {
+      status: 'accepted',
+      driverId: c.proposedByDriverId,
     });
   };
 
@@ -361,20 +434,43 @@ const CustomerOrders = () => {
                   {c.pickupLocation} → {c.dropLocation} | Status:{' '}
                   {c.status}
                 </div>
+                {c.status === 'quoted' && typeof c.proposedPrice === 'number' && (
+                  <div>
+                    Driver quote: ₹{c.proposedPrice}
+                  </div>
+                )}
                 {driver && (
                   <div>
                     Driver: {driver.name}
                     {driver.phone && ` (Phone: ${driver.phone})`}
                   </div>
                 )}
-                {c.status === 'pending' && (
-                  <button
-                    onClick={() => cancelCab(c)}
-                    style={{ marginTop: '4px' }}
-                  >
-                    Cancel
-                  </button>
-                )}
+                <div style={{ marginTop: '4px' }}>
+                  {c.status === 'quoted' && (
+                    <button
+                      onClick={() => acceptCabQuote(c)}
+                      style={{ marginRight: '8px' }}
+                    >
+                      Accept quote
+                    </button>
+                  )}
+                  {(c.status === 'quoted' ||
+                    c.status === 'accepted') && (
+                      <button
+                        onClick={() => setActiveChatRequestId(c.id)}
+                        style={{ marginRight: '8px' }}
+                      >
+                        Chat
+                      </button>
+                    )}
+                  {(c.status === 'pending' || c.status === 'quoted') && (
+                    <button
+                      onClick={() => cancelCab(c)}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </li>
             );
           })}
@@ -386,41 +482,63 @@ const CustomerOrders = () => {
       <section>
         <h2>Service requests</h2>
         <ul>
-          {serviceRequests.map((s) => (
-            <li
-              key={s.id}
-              style={{
-                marginBottom: '8px',
-                padding: '6px',
-                border: '1px solid #ccc',
-              }}
-            >
-              <div>
-                [{s.category}] {s.description} | Status: {s.status}
-              </div>
-              <div>Address: {s.address}</div>
-              {typeof s.proposedPrice === 'number' && (
-                <div>Worker quote: ₹{s.proposedPrice}</div>
-              )}
-              <div style={{ marginTop: '4px' }}>
-                {s.status === 'quoted' &&
-                  s.proposedByWorkerId &&
-                  typeof s.proposedPrice === 'number' && (
-                    <button
-                      onClick={() => acceptServiceQuote(s)}
-                      style={{ marginRight: '8px' }}
-                    >
-                      Accept quote
+          {serviceRequests.map((s) => {
+            const worker =
+              s.workerId && s.status === 'accepted'
+                ? workerProfiles[s.workerId]
+                : null;
+
+            return (
+              <li
+                key={s.id}
+                style={{
+                  marginBottom: '8px',
+                  padding: '6px',
+                  border: '1px solid #ccc',
+                }}
+              >
+                <div>
+                  [{s.category}] {s.description} | Status: {s.status}
+                </div>
+                <div>Address: {s.address}</div>
+                {typeof s.proposedPrice === 'number' && (
+                  <div>Worker quote: ₹{s.proposedPrice}</div>
+                )}
+                {worker && s.status === 'accepted' && (
+                  <div>
+                    Worker: {worker.name}
+                    {worker.phone && ` (Phone: ${worker.phone})`}
+                  </div>
+                )}
+                <div style={{ marginTop: '4px' }}>
+                  {s.status === 'quoted' &&
+                    s.proposedByWorkerId &&
+                    typeof s.proposedPrice === 'number' && (
+                      <button
+                        onClick={() => acceptServiceQuote(s)}
+                        style={{ marginRight: '8px' }}
+                      >
+                        Accept quote
+                      </button>
+                    )}
+                  {(s.status === 'quoted' ||
+                    s.status === 'accepted') && (
+                      <button
+                        onClick={() => setActiveChatRequestId(s.id)}
+                        style={{ marginRight: '8px' }}
+                      >
+                        Chat
+                      </button>
+                    )}
+                  {(s.status === 'pending' || s.status === 'quoted') && (
+                    <button onClick={() => cancelService(s)}>
+                      Cancel
                     </button>
                   )}
-                {(s.status === 'pending' || s.status === 'quoted') && (
-                  <button onClick={() => cancelService(s)}>
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
+                </div>
+              </li>
+            );
+          })}
           {serviceRequests.length === 0 && (
             <p>No service requests.</p>
           )}
@@ -461,13 +579,13 @@ const CustomerOrders = () => {
                 )}
                 {(b.status === 'pending' ||
                   b.status === 'confirmed') && (
-                  <button
-                    onClick={() => cancelBooking(b)}
-                    style={{ marginTop: '4px' }}
-                  >
-                    Cancel
-                  </button>
-                )}
+                    <button
+                      onClick={() => cancelBooking(b)}
+                      style={{ marginTop: '4px' }}
+                    >
+                      Cancel
+                    </button>
+                  )}
               </li>
             );
           })}
@@ -477,7 +595,7 @@ const CustomerOrders = () => {
         </ul>
       </section>
 
-      {/* Medical consultations */}
+
       <section>
         <h2>Doctor consultations</h2>
         <ul>
@@ -485,6 +603,26 @@ const CustomerOrders = () => {
             const doctor = c.doctorId
               ? doctorProfiles[c.doctorId]
               : null;
+
+            // Check if paid today
+            let isPaidToday = false;
+            if (c.lastPaymentDate) {
+              const lastPay = c.lastPaymentDate.toDate();
+              const now = new Date();
+              const isSameDay =
+                lastPay.getDate() === now.getDate() &&
+                lastPay.getMonth() === now.getMonth() &&
+                lastPay.getFullYear() === now.getFullYear();
+              isPaidToday = isSameDay;
+            }
+
+            const canChatOrPay = c.status === 'accepted' || c.status === 'completed';
+            const showChat = canChatOrPay && isPaidToday;
+            const showPay =
+              canChatOrPay &&
+              !isPaidToday &&
+              doctor?.consultationFee > 0;
+
             return (
               <li
                 key={c.id}
@@ -494,25 +632,98 @@ const CustomerOrders = () => {
                   border: '1px solid #ccc',
                 }}
               >
-                <div>Symptoms: {c.symptoms}</div>
-                <div>Status: {c.status}</div>
-                {doctor && (
-                  <div>
-                    Doctor: {doctor.name}
-                    {doctor.phone && ` (Phone: ${doctor.phone})`}
+                <div>
+                  Symptoms: {c.symptoms} | Status: {c.status}
+                </div>
+                {/* Symptom update for active/completed cases */}
+                {canChatOrPay && (
+                  <div style={{ marginTop: '4px' }}>
+                    {editingSymptomId === c.id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <textarea
+                          value={tempSymptomText}
+                          onChange={(e) => setTempSymptomText(e.target.value)}
+                          style={{ width: '100%', height: '60px' }}
+                        />
+                        <div>
+                          <button
+                            onClick={() => {
+                              updateSymptoms(c, tempSymptomText);
+                              setEditingSymptomId(null);
+                              setTempSymptomText('');
+                            }}
+                            style={{ marginRight: '8px' }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingSymptomId(null);
+                              setTempSymptomText('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingSymptomId(c.id);
+                          setTempSymptomText(c.symptoms);
+                        }}
+                      >
+                        Update Symptoms
+                      </button>
+                    )}
                   </div>
                 )}
+
+                {doctor && (
+                  <div style={{ marginTop: '4px', fontStyle: 'italic' }}>
+                    Doctor: {doctor.name}
+                    <br />
+                    About: {doctor.description || 'No description'}
+                    <br />
+                    Fee: ₹{doctor.consultationFee || 0}
+                  </div>
+                )}
+                {canChatOrPay && isPaidToday && doctor?.phone && (
+                  <div>Doctor Phone: {doctor.phone}</div>
+                )}
                 {c.prescription && (
-                  <div>Prescription: {c.prescription}</div>
+                  <div style={{ marginTop: '4px', color: 'green' }}>
+                    <strong>Prescription:</strong> {c.prescription}
+                  </div>
                 )}
-                {c.status === 'pending' && (
-                  <button
-                    onClick={() => cancelConsultation(c)}
-                    style={{ marginTop: '4px' }}
-                  >
-                    Cancel
-                  </button>
-                )}
+                <div style={{ marginTop: '4px' }}>
+                  {showPay && (
+                    <button
+                      onClick={() =>
+                        handlePayConsultation(c, doctor.consultationFee)
+                      }
+                      style={{ marginRight: '8px' }}
+                    >
+                      Pay ₹{doctor.consultationFee} to Chat
+                    </button>
+                  )}
+                  {showChat && (
+                    <button
+                      onClick={() => setActiveChatRequestId(c.id)}
+                      style={{ marginRight: '8px' }}
+                    >
+                      Chat
+                    </button>
+                  )}
+                  {c.status === 'pending' && (
+                    <button
+                      onClick={() => cancelConsultation(c)}
+                      style={{ marginTop: '4px' }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </li>
             );
           })}
@@ -521,6 +732,14 @@ const CustomerOrders = () => {
           )}
         </ul>
       </section>
+
+      {activeChatRequestId && (
+        <ChatWindow
+          requestId={activeChatRequestId}
+          currentUser={user}
+          onClose={() => setActiveChatRequestId(null)}
+        />
+      )}
     </div>
   );
 };

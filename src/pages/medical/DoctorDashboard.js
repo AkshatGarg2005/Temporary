@@ -11,6 +11,8 @@ import {
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
 
+import ChatWindow from '../../components/ChatWindow';
+
 const DoctorDashboard = () => {
   const { user } = useAuth();
   const [pending, setPending] = useState([]);
@@ -18,6 +20,11 @@ const DoctorDashboard = () => {
   const [notes, setNotes] = useState({});
   const [prescriptions, setPrescriptions] = useState({});
   const [patientProfiles, setPatientProfiles] = useState({});
+  const [activeChatRequestId, setActiveChatRequestId] = useState(null);
+
+  // Doctor's own profile data
+  const [myDescription, setMyDescription] = useState('');
+  const [myFee, setMyFee] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -42,6 +49,20 @@ const DoctorDashboard = () => {
       unsubPending();
       unsubMine();
     };
+  }, [user]);
+
+  // Load doctor's own profile
+  useEffect(() => {
+    if (!user) return;
+    const loadMyProfile = async () => {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (snap.exists()) {
+        const data = snap.data();
+        setMyDescription(data.description || '');
+        setMyFee(data.consultationFee || '');
+      }
+    };
+    loadMyProfile();
   }, [user]);
 
   // Load patient names & phone numbers
@@ -74,6 +95,15 @@ const DoctorDashboard = () => {
     }
   }, [pending, mine, patientProfiles]);
 
+  const saveProfile = async () => {
+    if (!user) return;
+    await updateDoc(doc(db, 'users', user.uid), {
+      description: myDescription,
+      consultationFee: myFee ? parseFloat(myFee) : 0,
+    });
+    alert('Profile updated!');
+  };
+
   const acceptConsultation = async (c) => {
     await updateDoc(doc(db, 'medicalConsultations', c.id), {
       doctorId: user.uid,
@@ -101,6 +131,40 @@ const DoctorDashboard = () => {
     <div>
       <h1>Doctor Dashboard</h1>
 
+      <div
+        style={{
+          marginBottom: '20px',
+          padding: '10px',
+          border: '1px solid #ccc',
+          backgroundColor: '#f9f9f9',
+        }}
+      >
+        <h3>Your Profile Settings</h3>
+        <div style={{ marginBottom: '8px' }}>
+          <label>
+            Description (visible to patients):
+            <br />
+            <textarea
+              value={myDescription}
+              onChange={(e) => setMyDescription(e.target.value)}
+              style={{ width: '100%', height: '60px' }}
+            />
+          </label>
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label>
+            Consultation Fee (₹):
+            <input
+              type="number"
+              value={myFee}
+              onChange={(e) => setMyFee(e.target.value)}
+              style={{ marginLeft: '8px' }}
+            />
+          </label>
+        </div>
+        <button onClick={saveProfile}>Save Profile</button>
+      </div>
+
       <h2>Pending consultations</h2>
       <ul>
         {pending.map((c) => {
@@ -115,12 +179,13 @@ const DoctorDashboard = () => {
               }}
             >
               <div>
-                Patient:{' '}
-                {patient ? patient.name : c.customerId}
-                {patient?.phone &&
-                  ` (Phone: ${patient.phone})`}
+                Patient: {patient ? patient.name : c.customerId}
+                {/* Phone hidden until accepted */}
               </div>
               <div>Symptoms: {c.symptoms}</div>
+              {patient?.medicalHistory && (
+                <div>Medical History: {patient.medicalHistory}</div>
+              )}
               {c.preferredTime && <div>Preferred: {c.preferredTime}</div>}
               <button onClick={() => acceptConsultation(c)}>Accept</button>
             </li>
@@ -133,6 +198,9 @@ const DoctorDashboard = () => {
       <ul>
         {mine.map((c) => {
           const patient = patientProfiles[c.customerId];
+          const currentPrescription =
+            prescriptions[c.id] ?? c.prescription ?? '';
+
           return (
             <li
               key={c.id}
@@ -144,11 +212,12 @@ const DoctorDashboard = () => {
             >
               <div>Status: {c.status}</div>
               <div>
-                Patient:{' '}
-                {patient ? patient.name : c.customerId}
-                {patient?.phone &&
-                  ` (Phone: ${patient.phone})`}
+                Patient: {patient ? patient.name : c.customerId}
+                {patient?.phone && ` (Phone: ${patient.phone})`}
               </div>
+              {patient?.medicalHistory && (
+                <div>Medical History: {patient.medicalHistory}</div>
+              )}
               <div>Symptoms: {c.symptoms}</div>
               <div>
                 Notes:
@@ -160,18 +229,20 @@ const DoctorDashboard = () => {
                       [c.id]: e.target.value,
                     }))
                   }
+                  style={{ display: 'block', width: '100%', marginTop: '4px' }}
                 />
               </div>
               <div>
                 Prescription (medicine list / instructions):
                 <textarea
-                  value={prescriptions[c.id] ?? c.prescription ?? ''}
+                  value={currentPrescription}
                   onChange={(e) =>
                     setPrescriptions((prev) => ({
                       ...prev,
                       [c.id]: e.target.value,
                     }))
                   }
+                  style={{ display: 'block', width: '100%', marginTop: '4px' }}
                 />
               </div>
               <div style={{ marginTop: '4px' }}>
@@ -180,8 +251,22 @@ const DoctorDashboard = () => {
                   <button
                     onClick={() => markCompleted(c)}
                     style={{ marginLeft: '8px' }}
+                    disabled={!currentPrescription.trim()}
+                    title={
+                      !currentPrescription.trim()
+                        ? 'Prescription required to complete'
+                        : ''
+                    }
                   >
                     Mark completed
+                  </button>
+                )}
+                {(c.status === 'accepted' || c.status === 'completed') && (
+                  <button
+                    onClick={() => setActiveChatRequestId(c.id)}
+                    style={{ marginLeft: '8px' }}
+                  >
+                    Chat
                   </button>
                 )}
               </div>
@@ -190,6 +275,14 @@ const DoctorDashboard = () => {
         })}
         {mine.length === 0 && <p>No consultations yet.</p>}
       </ul>
+
+      {activeChatRequestId && (
+        <ChatWindow
+          requestId={activeChatRequestId}
+          currentUser={user}
+          onClose={() => setActiveChatRequestId(null)}
+        />
+      )}
     </div>
   );
 };
