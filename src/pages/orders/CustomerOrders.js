@@ -388,91 +388,116 @@ const CustomerOrders = () => {
       alert('Failed to reorder item.');
     }
   };
+  const renderOrderList = (orders) => {
+    if (orders.length === 0) return <p>No orders.</p>;
+    return (
+      <ul>
+        {orders.map((o) => {
+          const product = products.find((p) => p.id === o.productId);
+          const shop = shopProfiles[o.shopId];
+          const delivery =
+            o.deliveryPartnerId && o.status !== 'delivered'
+              ? deliveryProfiles[o.deliveryPartnerId]
+              : null;
 
+          return (
+            <li
+              key={o.id}
+              style={{
+                marginBottom: '8px',
+                padding: '6px',
+                border: '1px solid #ccc',
+              }}
+            >
+              <div>
+                Product:{' '}
+                {product ? product.name : o.productId} | Qty:{' '}
+                {o.quantity} | Status: {o.status}
+              </div>
+              <div>
+                Shop:{' '}
+                {shop ? shop.name : o.shopId}
+                {shop?.address && ` | Address: ${shop.address}`}
+                {shop?.phone && ` | Phone: ${shop.phone}`}
+              </div>
+              <div>Delivery address: {o.address}</div>
+              {delivery && (
+                <div>
+                  Delivery partner: {delivery.name}
+                  {delivery.phone && ` (Phone: ${delivery.phone})`}
+                </div>
+              )}
+              {o.status === 'out_for_delivery' && o.deliveryOtp && (
+                <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#e0f7fa', border: '1px solid #006064' }}>
+                  <strong>Delivery OTP: {o.deliveryOtp}</strong>
+                  <br />
+                  <small>Share this code with the delivery partner upon arrival.</small>
+                </div>
+              )}
+              {o.status === 'pending_doctor_approval' && (
+                <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#fff3e0', border: '1px solid orange' }}>
+                  <strong>Status: Pending Doctor Approval</strong>
+                  <br />
+                  <small>The pharmacy has forwarded your prescription to a doctor for review.</small>
+                </div>
+              )}
+              {o.status === 'rejected' && o.rejectionReason && (
+                <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#ffebee', border: '1px solid #c62828' }}>
+                  <strong>Rejected:</strong> {o.rejectionReason}
+                </div>
+              )}
+
+              {o.isRepeatable && (
+                <div style={{ marginTop: '10px', padding: '5px', border: '1px dashed #2196F3', backgroundColor: '#E3F2FD' }}>
+                  <strong>Subscription Active:</strong> Repeats Monthly
+                  <button
+                    onClick={() => cancelSubscription(o)}
+                    style={{ marginLeft: '10px', fontSize: '0.8em', backgroundColor: '#FF9800', color: 'white', border: 'none', padding: '3px 8px', cursor: 'pointer' }}
+                  >
+                    Cancel Subscription
+                  </button>
+                </div>
+              )}
+              <div style={{ marginTop: '5px' }}>
+                <button onClick={() => reorder(o)}>
+                  Reorder
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
   return (
     <div>
       <h1>My Orders</h1>
 
       {/* Quick commerce */}
       <section>
-        <h2>Quick commerce orders</h2>
-        <ul>
-          {commerceOrders.map((o) => {
-            const product = products.find((p) => p.id === o.productId);
-            const shop = shopProfiles[o.shopId];
-            const delivery =
-              o.deliveryPartnerId && o.status !== 'delivered'
-                ? deliveryProfiles[o.deliveryPartnerId]
-                : null;
+        <h2>Quick Commerce Orders</h2>
+        {renderOrderList(commerceOrders.filter(o => {
+          const shop = shopProfiles[o.shopId];
+          return !shop || (shop.role !== 'RESTAURANT' && shop.role !== 'PHARMACY');
+        }))}
+      </section>
 
-            return (
-              <li
-                key={o.id}
-                style={{
-                  marginBottom: '8px',
-                  padding: '6px',
-                  border: '1px solid #ccc',
-                }}
-              >
-                <div>
-                  Product:{' '}
-                  {product ? product.name : o.productId} | Qty:{' '}
-                  {o.quantity} | Status: {o.status}
-                </div>
-                <div>
-                  Shop:{' '}
-                  {shop ? shop.name : o.shopId}
-                  {shop?.address && ` | Address: ${shop.address}`}
-                  {shop?.phone && ` | Phone: ${shop.phone}`}
-                </div>
-                <div>Delivery address: {o.address}</div>
-                {delivery && (
-                  <div>
-                    Delivery partner: {delivery.name}
-                    {delivery.phone && ` (Phone: ${delivery.phone})`}
-                  </div>
-                )}
-                {o.status === 'out_for_delivery' && o.deliveryOtp && (
-                  <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#e0f7fa', border: '1px solid #006064' }}>
-                    <strong>Delivery OTP: {o.deliveryOtp}</strong>
-                    <br />
-                    <small>Share this code with the delivery partner upon arrival.</small>
-                  </div>
-                )}
-                {o.status === 'pending_doctor_approval' && (
-                  <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#fff3e0', border: '1px solid orange' }}>
-                    <strong>Status: Pending Doctor Approval</strong>
-                    <br />
-                    <small>The pharmacy has forwarded your prescription to a doctor for review.</small>
-                  </div>
-                )}
-                {o.status === 'rejected' && o.rejectionReason && (
-                  <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#ffebee', border: '1px solid #c62828' }}>
-                    <strong>Rejected:</strong> {o.rejectionReason}
-                  </div>
-                )}
+      {/* Food Delivery */}
+      <section>
+        <h2>Food Delivery Orders</h2>
+        {renderOrderList(commerceOrders.filter(o => {
+          const shop = shopProfiles[o.shopId];
+          return shop && shop.role === 'RESTAURANT';
+        }))}
+      </section>
 
-                {o.isRepeatable && (
-                  <div style={{ marginTop: '10px', padding: '5px', border: '1px dashed #2196F3', backgroundColor: '#E3F2FD' }}>
-                    <strong>Subscription Active:</strong> Repeats Monthly
-                    <button
-                      onClick={() => cancelSubscription(o)}
-                      style={{ marginLeft: '10px', fontSize: '0.8em', backgroundColor: '#FF9800', color: 'white', border: 'none', padding: '3px 8px', cursor: 'pointer' }}
-                    >
-                      Cancel Subscription
-                    </button>
-                  </div>
-                )}
-                <div style={{ marginTop: '5px' }}>
-                  <button onClick={() => reorder(o)}>
-                    Reorder
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-          {commerceOrders.length === 0 && <p>No commerce orders.</p>}
-        </ul>
+      {/* Medicine Delivery */}
+      <section>
+        <h2>Medicine Orders</h2>
+        {renderOrderList(commerceOrders.filter(o => {
+          const shop = shopProfiles[o.shopId];
+          return shop && shop.role === 'PHARMACY';
+        }))}
       </section>
 
       {/* Cab */}
