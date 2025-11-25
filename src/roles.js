@@ -7,4 +7,5 @@ export const ROLE_OPTIONS = [
   'DELIVERY',
   'WORKER',
   'SUPPORT',
+  'RESTAURANT',
 ];

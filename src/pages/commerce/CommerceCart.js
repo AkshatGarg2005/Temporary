@@ -118,6 +118,7 @@ const CommerceCart = () => {
           shopId: item.shopId,
           productId: item.productId,
           quantity: item.quantity,
+          specialRequest: item.specialRequest || null,
           status: 'pending', // pending, accepted, rejected, ready_for_delivery, out_for_delivery, delivered
           deliveryPartnerId: null,
           address: savedAddress,
@@ -191,9 +192,14 @@ const CommerceCart = () => {
                   </strong>{' '}
                   {product?.price != null &&
                     `| ₹${product.price} each`}
+                  {item.specialRequest && (
+                    <div style={{ color: 'red', fontSize: '0.9em' }}>
+                      Note: {item.specialRequest}
+                    </div>
+                  )}
                 </div>
                 <div>
-                  Shop:{' '}
+                  Shop/Restaurant:{' '}
                   {shop ? shop.name : item.shopId}
                   {shop?.address && ` | Address: ${shop.address}`}
                   {shop?.phone && ` | Phone: ${shop.phone}`}

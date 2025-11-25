@@ -26,6 +26,7 @@ import DoctorDashboard from './pages/medical/DoctorDashboard';
 
 import CustomerCommerce from './pages/commerce/CustomerCommerce';
 import ShopDashboard from './pages/commerce/ShopDashboard';
+import RestaurantDashboard from './pages/commerce/RestaurantDashboard';
 import DeliveryDashboard from './pages/commerce/DeliveryDashboard';
 import CommerceCart from './pages/commerce/CommerceCart';
 
@@ -88,7 +89,7 @@ const AppInner = () => {
               {profile?.role === 'SUPPORT' && (
                 <Link to="/support/dashboard">Support Dashboard</Link>
               )}
-              {['SHOP', 'DRIVER', 'WORKER', 'HOST', 'DOCTOR', 'DELIVERY'].includes(profile?.role) && (
+              {['SHOP', 'DRIVER', 'WORKER', 'HOST', 'DOCTOR', 'DELIVERY', 'RESTAURANT'].includes(profile?.role) && (
                 <Link to="/support/provider">Support</Link>
               )}
               <span>
@@ -215,10 +216,27 @@ const AppInner = () => {
 
           {/* Quick commerce */}
           <Route
+            path="/commerce/quick"
+            element={
+              <RequireAuth allowedRoles={['CUSTOMER']}>
+                <CustomerCommerce mode="shop" />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/commerce/food"
+            element={
+              <RequireAuth allowedRoles={['CUSTOMER']}>
+                <CustomerCommerce mode="restaurant" />
+              </RequireAuth>
+            }
+          />
+          {/* Legacy route, defaults to all */}
+          <Route
             path="/commerce/customer"
             element={
               <RequireAuth allowedRoles={['CUSTOMER']}>
-                <CustomerCommerce />
+                <CustomerCommerce mode="all" />
               </RequireAuth>
             }
           />
@@ -246,6 +264,14 @@ const AppInner = () => {
               </RequireAuth>
             }
           />
+          <Route
+            path="/commerce/restaurant"
+            element={
+              <RequireAuth allowedRoles={['RESTAURANT']}>
+                <RestaurantDashboard />
+              </RequireAuth>
+            }
+          />
 
           {/* Customer Support */}
           <Route
@@ -267,7 +293,7 @@ const AppInner = () => {
           <Route
             path="/support/provider"
             element={
-              <RequireAuth allowedRoles={['SHOP', 'DRIVER', 'WORKER', 'HOST', 'DOCTOR', 'DELIVERY']}>
+              <RequireAuth allowedRoles={['SHOP', 'DRIVER', 'WORKER', 'HOST', 'DOCTOR', 'DELIVERY', 'RESTAURANT']}>
                 <ProviderSupportPage />
               </RequireAuth>
             }

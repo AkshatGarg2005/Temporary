@@ -45,7 +45,10 @@ const Dashboard = () => {
               <Link to="/medical/customer">Consult a doctor</Link>
             </li>
             <li>
-              <Link to="/commerce/customer">Order from quick commerce</Link>
+              <Link to="/commerce/quick">Order from quick commerce</Link>
+            </li>
+            <li>
+              <Link to="/commerce/food">Order Food Delivery</Link>
             </li>
             <li>
               <Link to="/orders">My orders (all in one)</Link>
@@ -115,6 +118,17 @@ const Dashboard = () => {
           <ul>
             <li>
               <Link to="/services/worker">Service jobs</Link>
+            </li>
+          </ul>
+        </>
+      )}
+
+      {role === 'RESTAURANT' && (
+        <>
+          <h2>Restaurant actions</h2>
+          <ul>
+            <li>
+              <Link to="/commerce/restaurant">Manage Menu & Orders</Link>
             </li>
           </ul>
         </>
