@@ -17,6 +17,7 @@ const CustomerCommerce = ({ mode = 'all' }) => {
   const { user, profile, loading } = useAuth();
   const [shops, setShops] = useState([]);
   const [restaurants, setRestaurants] = useState([]);
+  const [pharmacies, setPharmacies] = useState([]);
   const [products, setProducts] = useState([]);
   const [selectedShop, setSelectedShop] = useState(null);
   const [message, setMessage] = useState('');
@@ -42,6 +43,15 @@ const CustomerCommerce = ({ mode = 'all' }) => {
       setRestaurants(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
+    // All pharmacies (users with role PHARMACY)
+    const qPharmacies = query(
+      collection(db, 'users'),
+      where('role', '==', 'PHARMACY')
+    );
+    const unsubPharmacies = onSnapshot(qPharmacies, (snapshot) => {
+      setPharmacies(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
     // All available products (we filter by shopId in UI)
     const qProducts = query(
       collection(db, 'products'),
@@ -54,6 +64,7 @@ const CustomerCommerce = ({ mode = 'all' }) => {
     return () => {
       unsubShops();
       unsubRestaurants();
+      unsubPharmacies();
       unsubProducts();
     };
   }, []);
@@ -84,6 +95,14 @@ const CustomerCommerce = ({ mode = 'all' }) => {
         'Please set your address in My Profile before adding items to cart.'
       );
       return;
+    }
+
+    // Check for expired medicine
+    if (product.type === 'medicine' && product.expiryDate) {
+      if (new Date(product.expiryDate) < new Date()) {
+        setError('Cannot order expired medicine.');
+        return;
+      }
     }
 
     try {
@@ -136,10 +155,22 @@ const CustomerCommerce = ({ mode = 'all' }) => {
 
   const showShops = mode === 'all' || mode === 'shop';
   const showRestaurants = mode === 'all' || mode === 'restaurant';
+  const showPharmacies = mode === 'all' || mode === 'medicine';
 
   let title = 'Quick Commerce & Food Delivery';
   if (mode === 'shop') title = 'Quick Commerce (Shops)';
   if (mode === 'restaurant') title = 'Food Delivery (Restaurants)';
+  if (mode === 'medicine') title = 'Order Medicines (Pharmacies)';
+
+  // Helper to find substitutes
+  const findSubstitutes = (product) => {
+    if (!product.genericName || !product.dose) return [];
+    return shopProducts.filter(p =>
+      p.id !== product.id &&
+      p.genericName === product.genericName &&
+      p.dose === product.dose
+    );
+  };
 
   return (
     <div>
@@ -163,10 +194,10 @@ const CustomerCommerce = ({ mode = 'all' }) => {
         <p style={{ color: 'red', marginTop: '8px' }}>{error}</p>
       )}
 
-      <div style={{ display: 'flex', gap: '20px' }}>
+      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
         {/* Shops list */}
         {showShops && (
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: '200px' }}>
             <h2>Shops</h2>
             <ul>
               {shops.map((s) => (
@@ -190,7 +221,7 @@ const CustomerCommerce = ({ mode = 'all' }) => {
 
         {/* Restaurants list */}
         {showRestaurants && (
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: '200px' }}>
             <h2>Restaurants</h2>
             <ul>
               {restaurants.map((r) => (
@@ -211,47 +242,88 @@ const CustomerCommerce = ({ mode = 'all' }) => {
             </ul>
           </div>
         )}
+
+        {/* Pharmacies list */}
+        {showPharmacies && (
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <h2>Pharmacies</h2>
+            <ul>
+              {pharmacies.map((p) => (
+                <li key={p.id} style={{ marginBottom: '6px' }}>
+                  <div><strong>{p.name}</strong></div>
+                  {p.address && <div>Address: {p.address}</div>}
+                  <button onClick={() => selectShop(p)} style={{ marginTop: '4px' }}>
+                    View Medicines
+                  </button>
+                </li>
+              ))}
+              {pharmacies.length === 0 && <p>No pharmacies found.</p>}
+            </ul>
+          </div>
+        )}
       </div>
 
-      {/* Products of selected shop/restaurant */}
+      {/* Products of selected shop/restaurant/pharmacy */}
       {selectedShop && (
         <div style={{ marginTop: '16px', borderTop: '1px solid #ccc', paddingTop: '10px' }}>
-          <h2>Items from {selectedShop.name} ({selectedShop.role === 'RESTAURANT' ? 'Restaurant' : 'Shop'})</h2>
+          <h2>Items from {selectedShop.name} ({selectedShop.role})</h2>
           <ul>
-            {shopProducts.map((p) => (
-              <li key={p.id} style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #eee' }}>
-                <div>
-                  <strong>{p.name}</strong> ({p.category}) | ₹{p.price}
-                  {p.isVeg !== undefined && (
-                    <span style={{ marginLeft: '8px', color: p.isVeg ? 'green' : 'red' }}>
-                      {p.isVeg ? '● Veg' : '● Non-Veg'}
-                    </span>
-                  )}
-                </div>
-                {p.stock != null && <div>Stock: {p.stock}</div>}
+            {shopProducts.map((p) => {
+              const substitutes = selectedShop.role === 'PHARMACY' ? findSubstitutes(p) : [];
+              const isExpired = p.expiryDate && new Date(p.expiryDate) < new Date();
 
-                {/* Special Request Input for Food Items */}
-                {selectedShop.role === 'RESTAURANT' && (
-                  <div style={{ marginTop: '5px' }}>
-                    <input
-                      type="text"
-                      placeholder="Special request (e.g. no onion)"
-                      value={specialRequest}
-                      onChange={(e) => setSpecialRequest(e.target.value)}
-                      style={{ width: '200px', marginRight: '8px' }}
-                    />
+              return (
+                <li key={p.id} style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #eee' }}>
+                  <div>
+                    <strong>{p.name}</strong>
+                    {p.dose && ` ${p.dose}`}
+                    {p.brand && ` (${p.brand})`}
+                    {p.category && ` (${p.category})`}
+                    | ₹{p.price}
+                    {p.isVeg !== undefined && (
+                      <span style={{ marginLeft: '8px', color: p.isVeg ? 'green' : 'red' }}>
+                        {p.isVeg ? '● Veg' : '● Non-Veg'}
+                      </span>
+                    )}
+                    {p.genericName && (
+                      <div style={{ fontSize: '0.9em', color: '#666' }}>Generic: {p.genericName}</div>
+                    )}
+                    {isExpired && (
+                      <div style={{ color: 'red', fontWeight: 'bold' }}>EXPIRED - Cannot Order</div>
+                    )}
                   </div>
-                )}
+                  {p.stock != null && <div>Stock: {p.stock}</div>}
 
-                <button
-                  onClick={() => addToCart(p)}
-                  style={{ marginTop: '4px' }}
-                  disabled={!savedAddress}
-                >
-                  Add to cart
-                </button>
-              </li>
-            ))}
+                  {/* Substitutes */}
+                  {substitutes.length > 0 && (
+                    <div style={{ margin: '5px 0', fontSize: '0.9em', color: 'blue' }}>
+                      <strong>Substitutes available:</strong> {substitutes.map(s => `${s.name} (${s.brand}) - ₹${s.price}`).join(', ')}
+                    </div>
+                  )}
+
+                  {/* Special Request Input for Food Items */}
+                  {selectedShop.role === 'RESTAURANT' && (
+                    <div style={{ marginTop: '5px' }}>
+                      <input
+                        type="text"
+                        placeholder="Special request (e.g. no onion)"
+                        value={specialRequest}
+                        onChange={(e) => setSpecialRequest(e.target.value)}
+                        style={{ width: '200px', marginRight: '8px' }}
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => addToCart(p)}
+                    style={{ marginTop: '4px' }}
+                    disabled={!savedAddress || isExpired}
+                  >
+                    Add to cart
+                  </button>
+                </li>
+              );
+            })}
             {shopProducts.length === 0 && (
               <p>No items available.</p>
             )}

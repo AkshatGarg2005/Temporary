@@ -51,6 +51,9 @@ const Dashboard = () => {
               <Link to="/commerce/food">Order Food Delivery</Link>
             </li>
             <li>
+              <Link to="/commerce/medicine">Order Medicines</Link>
+            </li>
+            <li>
               <Link to="/orders">My orders (all in one)</Link>
             </li>
           </ul>
@@ -129,6 +132,17 @@ const Dashboard = () => {
           <ul>
             <li>
               <Link to="/commerce/restaurant">Manage Menu & Orders</Link>
+            </li>
+          </ul>
+        </>
+      )}
+
+      {role === 'PHARMACY' && (
+        <>
+          <h2>Pharmacy actions</h2>
+          <ul>
+            <li>
+              <Link to="/commerce/pharmacy">Manage Inventory & Orders</Link>
             </li>
           </ul>
         </>

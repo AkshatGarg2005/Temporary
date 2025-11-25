@@ -8,6 +8,7 @@ import {
   doc,
   getDoc,
   serverTimestamp,
+  addDoc,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
@@ -361,6 +362,33 @@ const CustomerOrders = () => {
     });
   };
 
+  const cancelSubscription = async (order) => {
+    if (window.confirm('Are you sure you want to cancel this subscription?')) {
+      await updateDoc(doc(db, 'commerceOrders', order.id), {
+        isRepeatable: false,
+        repeatFrequency: null,
+      });
+      alert('Subscription cancelled.');
+    }
+  };
+
+  const reorder = async (order) => {
+    try {
+      await addDoc(collection(db, 'cartItems'), {
+        userId: user.uid,
+        shopId: order.shopId,
+        productId: order.productId,
+        quantity: order.quantity,
+        specialRequest: order.specialRequest || null,
+        createdAt: serverTimestamp(),
+      });
+      alert('Item added to cart!');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to reorder item.');
+    }
+  };
+
   return (
     <div>
       <h1>My Orders</h1>
@@ -411,6 +439,35 @@ const CustomerOrders = () => {
                     <small>Share this code with the delivery partner upon arrival.</small>
                   </div>
                 )}
+                {o.status === 'pending_doctor_approval' && (
+                  <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#fff3e0', border: '1px solid orange' }}>
+                    <strong>Status: Pending Doctor Approval</strong>
+                    <br />
+                    <small>The pharmacy has forwarded your prescription to a doctor for review.</small>
+                  </div>
+                )}
+                {o.status === 'rejected' && o.rejectionReason && (
+                  <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#ffebee', border: '1px solid #c62828' }}>
+                    <strong>Rejected:</strong> {o.rejectionReason}
+                  </div>
+                )}
+
+                {o.isRepeatable && (
+                  <div style={{ marginTop: '10px', padding: '5px', border: '1px dashed #2196F3', backgroundColor: '#E3F2FD' }}>
+                    <strong>Subscription Active:</strong> Repeats Monthly
+                    <button
+                      onClick={() => cancelSubscription(o)}
+                      style={{ marginLeft: '10px', fontSize: '0.8em', backgroundColor: '#FF9800', color: 'white', border: 'none', padding: '3px 8px', cursor: 'pointer' }}
+                    >
+                      Cancel Subscription
+                    </button>
+                  </div>
+                )}
+                <div style={{ marginTop: '5px' }}>
+                  <button onClick={() => reorder(o)}>
+                    Reorder
+                  </button>
+                </div>
               </li>
             );
           })}

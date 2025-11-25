@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
+import { uploadToCloudinary } from '../../utils/cloudinaryUtils';
 
 const CommerceCart = () => {
   const { user, profile, loading } = useAuth();
@@ -21,6 +22,10 @@ const CommerceCart = () => {
   const [shops, setShops] = useState({});
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [prescription, setPrescription] = useState('');
+  const [consultations, setConsultations] = useState([]);
+  const [selectedConsultationId, setSelectedConsultationId] = useState('');
+  const [isRepeatable, setIsRepeatable] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -42,9 +47,19 @@ const CommerceCart = () => {
       }
     );
 
+    // Medical Consultations (for prescriptions)
+    const qConsultations = query(
+      collection(db, 'medicalConsultations'),
+      where('customerId', '==', user.uid)
+    );
+    const unsubConsultations = onSnapshot(qConsultations, (snapshot) => {
+      setConsultations(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
     return () => {
       unsubCart();
       unsubProducts();
+      unsubConsultations();
     };
   }, [user]);
 
@@ -96,6 +111,12 @@ const CommerceCart = () => {
     await deleteDoc(doc(db, 'cartItems', item.id));
   };
 
+  // Check if any item in cart is a medicine (from a PHARMACY)
+  const hasMedicine = cartItems.some(item => {
+    const shop = shops[item.shopId];
+    return shop?.role === 'PHARMACY';
+  });
+
   const placeOrder = async () => {
     setError('');
     setMessage('');
@@ -110,16 +131,35 @@ const CommerceCart = () => {
       return;
     }
 
+    let finalPrescription = prescription;
+    if (selectedConsultationId) {
+      const consult = consultations.find(c => c.id === selectedConsultationId);
+      if (consult) {
+        finalPrescription = `Consultation ID: ${consult.id} | Prescription: ${consult.prescription}`;
+      }
+    }
+
+    if (hasMedicine && !finalPrescription) {
+      setError('Prescription is required for medicine orders. Please select one or upload.');
+      return;
+    }
+
     try {
       // One commerceOrders document per cart item
       for (const item of cartItems) {
+        const shop = shops[item.shopId];
+        const isMedicine = shop?.role === 'PHARMACY';
+
         await addDoc(collection(db, 'commerceOrders'), {
           customerId: user.uid,
           shopId: item.shopId,
           productId: item.productId,
           quantity: item.quantity,
           specialRequest: item.specialRequest || null,
-          status: 'pending', // pending, accepted, rejected, ready_for_delivery, out_for_delivery, delivered
+          prescriptionUrl: isMedicine ? finalPrescription : null,
+          status: isMedicine ? 'pending_prescription_review' : 'pending',
+          isRepeatable: isMedicine && isRepeatable ? true : false,
+          repeatFrequency: isMedicine && isRepeatable ? 'monthly' : null,
           deliveryPartnerId: null,
           address: savedAddress,
           createdAt: serverTimestamp(),
@@ -130,6 +170,7 @@ const CommerceCart = () => {
       }
 
       setMessage('Order placed successfully. You can track it in "My Orders".');
+      setPrescription('');
     } catch (err) {
       console.error(err);
       setError(err.message || 'Failed to place order');
@@ -199,7 +240,7 @@ const CommerceCart = () => {
                   )}
                 </div>
                 <div>
-                  Shop/Restaurant:{' '}
+                  Shop/Restaurant/Pharmacy:{' '}
                   {shop ? shop.name : item.shopId}
                   {shop?.address && ` | Address: ${shop.address}`}
                   {shop?.phone && ` | Phone: ${shop.phone}`}
@@ -236,6 +277,85 @@ const CommerceCart = () => {
           <p>
             <strong>Cart total:</strong> ₹{cartTotal.toFixed(2)}
           </p>
+
+          {hasMedicine && (
+            <div style={{ marginBottom: '10px', padding: '10px', border: '1px solid orange', backgroundColor: '#fff3e0' }}>
+              <h3>Prescription Required</h3>
+              <p>One or more items in your cart require a prescription.</p>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label>
+                  <strong>Option 1: Select from your Doctor Consultations</strong>
+                  <br />
+                  <select
+                    value={selectedConsultationId}
+                    onChange={(e) => {
+                      setSelectedConsultationId(e.target.value);
+                      if (e.target.value) setPrescription(''); // Clear manual input if selecting
+                    }}
+                    style={{ marginTop: '5px', width: '100%' }}
+                  >
+                    <option value="">-- Select a consultation --</option>
+                    {consultations
+                      .filter(c => c.prescription)
+                      .map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.prescription.substring(0, 30)}... (Doctor: {c.doctorId ? 'Yes' : 'Unknown'})
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label>
+                  <strong>Option 2: Upload Prescription (PDF/Image)</strong>
+                  <br />
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={async (e) => {
+                      if (e.target.files[0]) {
+                        try {
+                          setMessage('Uploading prescription...');
+                          const url = await uploadToCloudinary(e.target.files[0]);
+                          setPrescription(url);
+                          setSelectedConsultationId('');
+                          setMessage('Prescription uploaded successfully!');
+                        } catch (err) {
+                          console.error(err);
+                          setError('Failed to upload prescription.');
+                        }
+                      }
+                    }}
+                    style={{ marginTop: '5px' }}
+                  />
+                  {prescription && !selectedConsultationId && (
+                    <div style={{ fontSize: '0.8em', color: 'green' }}>
+                      Uploaded: <a href={prescription} target="_blank" rel="noopener noreferrer">View File</a>
+                    </div>
+                  )}
+                </label>
+              </div>
+
+              <div style={{ marginTop: '10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={isRepeatable}
+                    onChange={(e) => setIsRepeatable(e.target.checked)}
+                  />
+                  <strong>Repeat this order every month</strong>
+                </label>
+                <small style={{ display: 'block', color: '#666', marginLeft: '24px' }}>
+                  We will automatically place this order for you every month until you cancel.
+                </small>
+              </div>
+
+
+            </div>
+          )}
+
           <button
             onClick={placeOrder}
             disabled={!savedAddress || cartItems.length === 0}

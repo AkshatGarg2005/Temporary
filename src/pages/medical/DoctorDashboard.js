@@ -129,9 +129,88 @@ const DoctorDashboard = () => {
     });
   };
 
+  const [reviews, setReviews] = useState([]);
+  const [products, setProducts] = useState({});
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Orders forwarded to this doctor
+    const qReviews = query(
+      collection(db, 'commerceOrders'),
+      where('forwardedToDoctorId', '==', user.uid),
+      where('status', '==', 'pending_doctor_approval')
+    );
+    const unsubReviews = onSnapshot(qReviews, (snapshot) => {
+      setReviews(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    // Fetch all products to show names
+    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+      const map = {};
+      snapshot.docs.forEach(d => {
+        map[d.id] = d.data();
+      });
+      setProducts(map);
+    });
+
+    return () => {
+      unsubReviews();
+      unsubProducts();
+    };
+  }, [user]);
+
+  const reviewOrder = async (order, decision, reason = null) => {
+    const updateData = {
+      status: decision === 'approve' ? 'accepted' : 'rejected',
+      forwardedToDoctorId: null, // Clear it so it goes back to pharmacy/customer flow logic
+    };
+    if (reason) updateData.rejectionReason = reason;
+
+    await updateDoc(doc(db, 'commerceOrders', order.id), updateData);
+  };
+
   return (
     <div>
       <h1>Doctor Dashboard</h1>
+
+      {reviews.length > 0 && (
+        <div style={{ marginBottom: '20px', padding: '10px', border: '2px solid #2196F3', backgroundColor: '#E3F2FD' }}>
+          <h2>Prescription Reviews Required</h2>
+          <ul>
+            {reviews.map(r => {
+              const product = products[r.productId];
+              return (
+                <li key={r.id} style={{ marginBottom: '10px', padding: '5px', background: 'white' }}>
+                  <div><strong>Order ID:</strong> {r.id}</div>
+                  <div>
+                    <strong>Medicine:</strong> {product ? `${product.name} ${product.dose || ''}` : r.productId}
+                    (Qty: {r.quantity})
+                  </div>
+                  <div style={{ margin: '5px 0', padding: '5px', background: '#f5f5f5', borderLeft: '3px solid #2196F3' }}>
+                    <strong>Prescription:</strong>
+                    {r.prescriptionUrl && r.prescriptionUrl.startsWith('http') ? (
+                      <a href={r.prescriptionUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '5px' }}>
+                        View File
+                      </a>
+                    ) : (
+                      <span style={{ marginLeft: '5px' }}>{r.prescriptionUrl}</span>
+                    )}
+                  </div>
+                  <div style={{ marginTop: '5px' }}>
+                    <button onClick={() => reviewOrder(r, 'approve')} style={{ marginRight: '10px', backgroundColor: '#4CAF50', color: 'white' }}>
+                      Approve
+                    </button>
+                    <button onClick={() => reviewOrder(r, 'reject', 'Doctor rejected prescription')} style={{ backgroundColor: '#F44336', color: 'white' }}>
+                      Reject
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       <div
         style={{
