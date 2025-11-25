@@ -404,6 +404,13 @@ const CustomerOrders = () => {
                     {delivery.phone && ` (Phone: ${delivery.phone})`}
                   </div>
                 )}
+                {o.status === 'out_for_delivery' && o.deliveryOtp && (
+                  <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#e0f7fa', border: '1px solid #006064' }}>
+                    <strong>Delivery OTP: {o.deliveryOtp}</strong>
+                    <br />
+                    <small>Share this code with the delivery partner upon arrival.</small>
+                  </div>
+                )}
               </li>
             );
           })}

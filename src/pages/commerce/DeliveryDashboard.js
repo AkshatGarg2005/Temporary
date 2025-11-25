@@ -98,15 +98,43 @@ const DeliveryDashboard = () => {
   const acceptDelivery = async (order) => {
     await updateDoc(doc(db, 'commerceOrders', order.id), {
       deliveryPartnerId: user.uid,
-      status: 'out_for_delivery',
+      status: 'accepted_by_delivery',
     });
+  };
+
+  const markPickedUp = async (order) => {
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    await updateDoc(doc(db, 'commerceOrders', order.id), {
+      status: 'out_for_delivery',
+      deliveryOtp: otp,
+    });
+    alert(`Order picked up! OTP generated.`);
+  };
+
+  const [otpInputs, setOtpInputs] = useState({});
+
+  const handleOtpChange = (orderId, value) => {
+    setOtpInputs((prev) => ({ ...prev, [orderId]: value }));
   };
 
   const markDelivered = async (order) => {
     if (order.status !== 'out_for_delivery') return;
+
+    const enteredOtp = otpInputs[order.id];
+    if (!enteredOtp) {
+      alert('Please enter the OTP provided by the customer.');
+      return;
+    }
+
+    if (enteredOtp !== order.deliveryOtp) {
+      alert('Incorrect OTP. Please try again.');
+      return;
+    }
+
     await updateDoc(doc(db, 'commerceOrders', order.id), {
       status: 'delivered',
     });
+    alert('Order delivered successfully!');
   };
 
   return (
@@ -180,10 +208,26 @@ const DeliveryDashboard = () => {
                   ` (Phone: ${customer.phone})`}
               </div>
               <div>Delivery address: {o.address}</div>
-              {o.status === 'out_for_delivery' && (
-                <button onClick={() => markDelivered(o)}>
-                  Mark delivered
+
+              {o.status === 'accepted_by_delivery' && (
+                <button onClick={() => markPickedUp(o)}>
+                  Pick Up (Generate OTP)
                 </button>
+              )}
+
+              {o.status === 'out_for_delivery' && (
+                <div style={{ marginTop: '10px' }}>
+                  <input
+                    type="text"
+                    placeholder="Enter Customer OTP"
+                    value={otpInputs[o.id] || ''}
+                    onChange={(e) => handleOtpChange(o.id, e.target.value)}
+                    style={{ marginRight: '10px', padding: '5px' }}
+                  />
+                  <button onClick={() => markDelivered(o)}>
+                    Verify & Deliver
+                  </button>
+                </div>
               )}
             </li>
           );
