@@ -385,9 +385,24 @@ const CustomerOrders = () => {
       alert('Item added to cart!');
     } catch (err) {
       console.error(err);
-      alert('Failed to reorder item.');
     }
   };
+
+  const cancelCommerceOrder = async (order) => {
+    if (order.status !== 'pending') return;
+    if (window.confirm('Are you sure you want to cancel this order?')) {
+      try {
+        await updateDoc(doc(db, 'commerceOrders', order.id), {
+          status: 'cancelled',
+        });
+        alert('Order cancelled successfully.');
+      } catch (err) {
+        console.error(err);
+        alert('Failed to cancel order.');
+      }
+    }
+  };
+
   const renderOrderList = (orders) => {
     if (orders.length === 0) return <p>No orders.</p>;
     return (
@@ -462,6 +477,14 @@ const CustomerOrders = () => {
                 <button onClick={() => reorder(o)}>
                   Reorder
                 </button>
+                {o.status === 'pending' && (
+                  <button
+                    onClick={() => cancelCommerceOrder(o)}
+                    style={{ marginLeft: '8px', backgroundColor: '#d32f2f', color: 'white' }}
+                  >
+                    Cancel Order
+                  </button>
+                )}
               </div>
             </li>
           );
