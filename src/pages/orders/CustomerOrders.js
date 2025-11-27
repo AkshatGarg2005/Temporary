@@ -496,6 +496,12 @@ const CustomerOrders = () => {
     <div>
       <h1>My Orders</h1>
 
+      {/* Subscriptions */}
+      <section>
+        <h2>My Subscriptions</h2>
+        {renderOrderList(commerceOrders.filter(o => o.isRepeatable))}
+      </section>
+
       {/* Quick commerce */}
       <section>
         <h2>Quick Commerce Orders</h2>
