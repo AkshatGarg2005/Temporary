@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
+import { uploadToCloudinary } from '../../utils/cloudinaryUtils';
 
 const RestaurantDashboard = () => {
     const { user } = useAuth();
@@ -108,59 +109,188 @@ const RestaurantDashboard = () => {
         });
     };
 
+    const [editingProduct, setEditingProduct] = useState(null);
+    const [editName, setEditName] = useState('');
+    const [editCategory, setEditCategory] = useState('');
+    const [editPrice, setEditPrice] = useState('');
+    const [editIsVeg, setEditIsVeg] = useState(false);
+    const [editDescription, setEditDescription] = useState('');
+    const [editImages, setEditImages] = useState([]);
+    const [uploading, setUploading] = useState(false);
+
+    const startEditing = (product) => {
+        setEditingProduct(product);
+        setEditName(product.name);
+        setEditCategory(product.category);
+        setEditPrice(product.price);
+        setEditIsVeg(product.isVeg || false);
+        setEditDescription(product.description || '');
+        if (product.images && Array.isArray(product.images)) {
+            setEditImages(product.images);
+        } else if (product.image) {
+            setEditImages([product.image]);
+        } else {
+            setEditImages([]);
+        }
+    };
+
+    const cancelEditing = () => {
+        setEditingProduct(null);
+        setEditName('');
+        setEditCategory('');
+        setEditPrice('');
+        setEditIsVeg(false);
+        setEditDescription('');
+        setEditImages([]);
+    };
+
+    const handleImageUpload = async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+        setUploading(true);
+        try {
+            const urls = await Promise.all(files.map(file => uploadToCloudinary(file)));
+            setEditImages(prev => [...prev, ...urls]);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to upload images');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const removeImage = (index) => {
+        setEditImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const saveEdit = async (e) => {
+        e.preventDefault();
+        if (!editingProduct) return;
+
+        try {
+            await updateDoc(doc(db, 'products', editingProduct.id), {
+                name: editName,
+                category: editCategory,
+                price: parseFloat(editPrice),
+                isVeg: editIsVeg,
+                description: editDescription,
+                images: editImages,
+                image: editImages.length > 0 ? editImages[0] : null,
+            });
+            alert('Item updated successfully!');
+            cancelEditing();
+        } catch (err) {
+            console.error(err);
+            alert('Failed to update item');
+        }
+    };
+
     return (
         <div>
             <h1>Restaurant Dashboard</h1>
 
-            <h2>Add Food Item</h2>
-            <form
-                onSubmit={createFoodItem}
-                style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    maxWidth: '400px',
-                }}
-            >
-                <label>
-                    Name
-                    <input
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                    />
-                </label>
+            {editingProduct ? (
+                <div style={{ padding: '20px', border: '1px solid #ccc', marginBottom: '20px', backgroundColor: '#f9f9f9' }}>
+                    <h2>Edit Item</h2>
+                    <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '400px' }}>
+                        <label>
+                            Name:
+                            <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+                        </label>
+                        <label>
+                            Category:
+                            <input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} required />
+                        </label>
+                        <label>
+                            Price:
+                            <input type="number" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} required />
+                        </label>
+                        <label>
+                            <input type="checkbox" checked={editIsVeg} onChange={(e) => setEditIsVeg(e.target.checked)} />
+                            Vegetarian
+                        </label>
+                        <label>
+                            Description:
+                            <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows="3" />
+                        </label>
+                        <label>
+                            Images:
+                            <input type="file" accept="image/*" multiple onChange={handleImageUpload} />
+                            {uploading && <span>Uploading...</span>}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px' }}>
+                                {editImages.map((url, index) => (
+                                    <div key={index} style={{ position: 'relative' }}>
+                                        <img src={url} alt={`Preview ${index}`} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px' }} />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeImage(index)}
+                                            style={{ position: 'absolute', top: -5, right: -5, backgroundColor: 'red', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', border: 'none', cursor: 'pointer' }}
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </label>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button type="button" onClick={cancelEditing}>Cancel</button>
+                            <button type="submit" disabled={uploading}>Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            ) : (
+                <>
+                    <h2>Add Food Item</h2>
+                    <form
+                        onSubmit={createFoodItem}
+                        style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            maxWidth: '400px',
+                        }}
+                    >
+                        <label>
+                            Name
+                            <input
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                required
+                            />
+                        </label>
 
-                <label>
-                    Category (e.g., Starter, Main Course)
-                    <input
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        required
-                    />
-                </label>
+                        <label>
+                            Category (e.g., Starter, Main Course)
+                            <input
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                                required
+                            />
+                        </label>
 
-                <label>
-                    Price
-                    <input
-                        type="number"
-                        value={price}
-                        onChange={(e) => setPrice(e.target.value)}
-                        required
-                    />
-                </label>
+                        <label>
+                            Price
+                            <input
+                                type="number"
+                                value={price}
+                                onChange={(e) => setPrice(e.target.value)}
+                                required
+                            />
+                        </label>
 
-                <label>
-                    <input
-                        type="checkbox"
-                        checked={isVeg}
-                        onChange={(e) => setIsVeg(e.target.checked)}
-                    />
-                    Vegetarian
-                </label>
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={isVeg}
+                                onChange={(e) => setIsVeg(e.target.checked)}
+                            />
+                            Vegetarian
+                        </label>
 
-                <button type="submit">Add Item</button>
-            </form>
+                        <button type="submit">Add Item</button>
+                    </form>
+                </>
+            )}
 
             <h2>Your Menu</h2>
             <ul>
@@ -173,6 +303,12 @@ const RestaurantDashboard = () => {
                             style={{ marginLeft: '8px' }}
                         >
                             Toggle availability
+                        </button>
+                        <button
+                            onClick={() => startEditing(p)}
+                            style={{ marginLeft: '8px', backgroundColor: '#2196F3', color: 'white' }}
+                        >
+                            Edit
                         </button>
                     </li>
                 ))}

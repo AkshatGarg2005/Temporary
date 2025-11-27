@@ -27,6 +27,7 @@ const ProductDetails = () => {
     const [specialRequest, setSpecialRequest] = useState('');
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
+    const [selectedImage, setSelectedImage] = useState('');
 
     // Buy Now State
     const [buyNowModalOpen, setBuyNowModalOpen] = useState(false);
@@ -40,6 +41,11 @@ const ProductDetails = () => {
                 if (docSnap.exists()) {
                     const pData = { id: docSnap.id, ...docSnap.data() };
                     setProduct(pData);
+                    if (pData.images && pData.images.length > 0) {
+                        setSelectedImage(pData.images[0]);
+                    } else if (pData.image) {
+                        setSelectedImage(pData.image);
+                    }
 
                     // Fetch Shop
                     if (pData.shopId) {
@@ -180,6 +186,37 @@ const ProductDetails = () => {
             <div style={{ display: 'flex', gap: '40px', flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: '300px' }}>
                     <h1>{product.name}</h1>
+
+                    {/* Image Gallery */}
+                    <div style={{ marginBottom: '20px' }}>
+                        {selectedImage && (
+                            <img
+                                src={selectedImage}
+                                alt={product.name}
+                                style={{ width: '100%', maxWidth: '400px', height: '300px', objectFit: 'cover', borderRadius: '8px', marginBottom: '10px' }}
+                            />
+                        )}
+                        {product.images && product.images.length > 1 && (
+                            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto' }}>
+                                {product.images.map((img, idx) => (
+                                    <img
+                                        key={idx}
+                                        src={img}
+                                        alt={`Thumbnail ${idx}`}
+                                        onClick={() => setSelectedImage(img)}
+                                        style={{
+                                            width: '60px',
+                                            height: '60px',
+                                            objectFit: 'cover',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            border: selectedImage === img ? '2px solid #2196F3' : '1px solid #ccc'
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     {shop && <p>Sold by: <strong>{shop.name}</strong> ({shop.role})</p>}
                     <h2 style={{ color: '#2E7D32' }}>₹{product.price}</h2>
 

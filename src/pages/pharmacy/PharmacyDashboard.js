@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../AuthContext';
+import { uploadToCloudinary } from '../../utils/cloudinaryUtils';
 
 const PharmacyDashboard = () => {
     const { user } = useAuth();
@@ -158,55 +159,216 @@ const PharmacyDashboard = () => {
         });
     };
 
+    const [editingProduct, setEditingProduct] = useState(null);
+    const [editName, setEditName] = useState('');
+    const [editDose, setEditDose] = useState('');
+    const [editBrand, setEditBrand] = useState('');
+    const [editGenericName, setEditGenericName] = useState('');
+    const [editBatchNumber, setEditBatchNumber] = useState('');
+    const [editExpiryDate, setEditExpiryDate] = useState('');
+    const [editPrice, setEditPrice] = useState('');
+    const [editStock, setEditStock] = useState('');
+    const [editDescription, setEditDescription] = useState('');
+    const [editImages, setEditImages] = useState([]);
+    const [uploading, setUploading] = useState(false);
+
+    const startEditing = (product) => {
+        setEditingProduct(product);
+        setEditName(product.name);
+        setEditDose(product.dose || '');
+        setEditBrand(product.brand || '');
+        setEditGenericName(product.genericName || '');
+        setEditBatchNumber(product.batchNumber || '');
+        setEditExpiryDate(product.expiryDate || '');
+        setEditPrice(product.price);
+        setEditStock(product.stock || '');
+        setEditDescription(product.description || '');
+        if (product.images && Array.isArray(product.images)) {
+            setEditImages(product.images);
+        } else if (product.image) {
+            setEditImages([product.image]);
+        } else {
+            setEditImages([]);
+        }
+    };
+
+    const cancelEditing = () => {
+        setEditingProduct(null);
+        setEditName('');
+        setEditDose('');
+        setEditBrand('');
+        setEditGenericName('');
+        setEditBatchNumber('');
+        setEditExpiryDate('');
+        setEditPrice('');
+        setEditStock('');
+        setEditDescription('');
+        setEditImages([]);
+    };
+
+    const handleImageUpload = async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+        setUploading(true);
+        try {
+            const urls = await Promise.all(files.map(file => uploadToCloudinary(file)));
+            setEditImages(prev => [...prev, ...urls]);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to upload images');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const removeImage = (index) => {
+        setEditImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const saveEdit = async (e) => {
+        e.preventDefault();
+        if (!editingProduct) return;
+
+        try {
+            await updateDoc(doc(db, 'products', editingProduct.id), {
+                name: editName,
+                dose: editDose,
+                brand: editBrand,
+                genericName: editGenericName,
+                batchNumber: editBatchNumber,
+                expiryDate: editExpiryDate,
+                price: parseFloat(editPrice),
+                stock: editStock ? parseInt(editStock, 10) : 0,
+                description: editDescription,
+                images: editImages,
+                image: editImages.length > 0 ? editImages[0] : null,
+            });
+            alert('Medicine updated successfully!');
+            cancelEditing();
+        } catch (err) {
+            console.error(err);
+            alert('Failed to update medicine');
+        }
+    };
+
     return (
         <div>
             <h1>Pharmacy Dashboard</h1>
 
-            <h2>Add Medicine</h2>
-            <form
-                onSubmit={addMedicine}
-                style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    maxWidth: '400px',
-                }}
-            >
-                <label>
-                    Medicine Name
-                    <input value={name} onChange={(e) => setName(e.target.value)} required />
-                </label>
-                <label>
-                    Dose (e.g., 500mg)
-                    <input value={dose} onChange={(e) => setDose(e.target.value)} />
-                </label>
-                <label>
-                    Brand
-                    <input value={brand} onChange={(e) => setBrand(e.target.value)} />
-                </label>
-                <label>
-                    Generic Name (for substitutes)
-                    <input value={genericName} onChange={(e) => setGenericName(e.target.value)} />
-                </label>
-                <label>
-                    Batch Number
-                    <input value={batchNumber} onChange={(e) => setBatchNumber(e.target.value)} />
-                </label>
-                <label>
-                    Expiry Date
-                    <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} required />
-                </label>
-                <label>
-                    Price
-                    <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required />
-                </label>
-                <label>
-                    Stock
-                    <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} />
-                </label>
+            {editingProduct ? (
+                <div style={{ padding: '20px', border: '1px solid #ccc', marginBottom: '20px', backgroundColor: '#f9f9f9' }}>
+                    <h2>Edit Medicine</h2>
+                    <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '400px' }}>
+                        <label>
+                            Name:
+                            <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+                        </label>
+                        <label>
+                            Dose:
+                            <input value={editDose} onChange={(e) => setEditDose(e.target.value)} />
+                        </label>
+                        <label>
+                            Brand:
+                            <input value={editBrand} onChange={(e) => setEditBrand(e.target.value)} />
+                        </label>
+                        <label>
+                            Generic Name:
+                            <input value={editGenericName} onChange={(e) => setEditGenericName(e.target.value)} />
+                        </label>
+                        <label>
+                            Batch Number:
+                            <input value={editBatchNumber} onChange={(e) => setEditBatchNumber(e.target.value)} />
+                        </label>
+                        <label>
+                            Expiry Date:
+                            <input type="date" value={editExpiryDate} onChange={(e) => setEditExpiryDate(e.target.value)} required />
+                        </label>
+                        <label>
+                            Price:
+                            <input type="number" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} required />
+                        </label>
+                        <label>
+                            Stock:
+                            <input type="number" value={editStock} onChange={(e) => setEditStock(e.target.value)} />
+                        </label>
+                        <label>
+                            Description:
+                            <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows="3" />
+                        </label>
+                        <label>
+                            Images:
+                            <input type="file" accept="image/*" multiple onChange={handleImageUpload} />
+                            {uploading && <span>Uploading...</span>}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px' }}>
+                                {editImages.map((url, index) => (
+                                    <div key={index} style={{ position: 'relative' }}>
+                                        <img src={url} alt={`Preview ${index}`} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px' }} />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeImage(index)}
+                                            style={{ position: 'absolute', top: -5, right: -5, backgroundColor: 'red', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', border: 'none', cursor: 'pointer' }}
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </label>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button type="button" onClick={cancelEditing}>Cancel</button>
+                            <button type="submit" disabled={uploading}>Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            ) : (
+                <>
+                    <h2>Add Medicine</h2>
+                    <form
+                        onSubmit={addMedicine}
+                        style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            maxWidth: '400px',
+                        }}
+                    >
+                        <label>
+                            Medicine Name
+                            <input value={name} onChange={(e) => setName(e.target.value)} required />
+                        </label>
+                        <label>
+                            Dose (e.g., 500mg)
+                            <input value={dose} onChange={(e) => setDose(e.target.value)} />
+                        </label>
+                        <label>
+                            Brand
+                            <input value={brand} onChange={(e) => setBrand(e.target.value)} />
+                        </label>
+                        <label>
+                            Generic Name (for substitutes)
+                            <input value={genericName} onChange={(e) => setGenericName(e.target.value)} />
+                        </label>
+                        <label>
+                            Batch Number
+                            <input value={batchNumber} onChange={(e) => setBatchNumber(e.target.value)} />
+                        </label>
+                        <label>
+                            Expiry Date
+                            <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} required />
+                        </label>
+                        <label>
+                            Price
+                            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required />
+                        </label>
+                        <label>
+                            Stock
+                            <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} />
+                        </label>
 
-                <button type="submit">Add Medicine</button>
-            </form>
+                        <button type="submit">Add Medicine</button>
+                    </form>
+                </>
+            )}
 
             <h2>Inventory</h2>
             <ul>
@@ -222,6 +384,12 @@ const PharmacyDashboard = () => {
                             style={{ marginLeft: '8px' }}
                         >
                             Toggle availability
+                        </button>
+                        <button
+                            onClick={() => startEditing(p)}
+                            style={{ marginLeft: '8px', backgroundColor: '#2196F3', color: 'white' }}
+                        >
+                            Edit
                         </button>
                     </li>
                 ))}

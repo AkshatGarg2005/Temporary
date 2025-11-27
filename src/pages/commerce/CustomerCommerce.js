@@ -336,28 +336,37 @@ const CustomerCommerce = ({ mode = 'all' }) => {
 
               return (
                 <li key={p.id} style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #eee' }}>
-                  <div>
-                    <strong
-                      style={{ cursor: 'pointer', color: '#2196F3', textDecoration: 'underline' }}
-                      onClick={() => window.location.href = `/product/${p.id}`}
-                    >
-                      {p.name}
-                    </strong>
-                    {p.dose && ` ${p.dose}`}
-                    {p.brand && ` (${p.brand})`}
-                    {p.category && ` (${p.category})`}
-                    | ₹{p.price}
-                    {p.isVeg !== undefined && (
-                      <span style={{ marginLeft: '8px', color: p.isVeg ? 'green' : 'red' }}>
-                        {p.isVeg ? '● Veg' : '● Non-Veg'}
-                      </span>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {p.image && (
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px', marginRight: '10px' }}
+                      />
                     )}
-                    {p.genericName && (
-                      <div style={{ fontSize: '0.9em', color: '#666' }}>Generic: {p.genericName}</div>
-                    )}
-                    {isExpired && (
-                      <div style={{ color: 'red', fontWeight: 'bold' }}>EXPIRED - Cannot Order</div>
-                    )}
+                    <div>
+                      <strong
+                        style={{ cursor: 'pointer', color: '#2196F3', textDecoration: 'underline' }}
+                        onClick={() => window.location.href = `/product/${p.id}`}
+                      >
+                        {p.name}
+                      </strong>
+                      {p.dose && ` ${p.dose}`}
+                      {p.brand && ` (${p.brand})`}
+                      {p.category && ` (${p.category})`}
+                      | ₹{p.price}
+                      {p.isVeg !== undefined && (
+                        <span style={{ marginLeft: '8px', color: p.isVeg ? 'green' : 'red' }}>
+                          {p.isVeg ? '● Veg' : '● Non-Veg'}
+                        </span>
+                      )}
+                      {p.genericName && (
+                        <div style={{ fontSize: '0.9em', color: '#666' }}>Generic: {p.genericName}</div>
+                      )}
+                      {isExpired && (
+                        <div style={{ color: 'red', fontWeight: 'bold' }}>EXPIRED - Cannot Order</div>
+                      )}
+                    </div>
                   </div>
                   {p.stock != null && <div>Stock: {p.stock}</div>}
 
