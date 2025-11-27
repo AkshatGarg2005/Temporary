@@ -362,11 +362,23 @@ const CustomerOrders = () => {
     });
   };
 
+  const updateSubscriptionStatus = async (order, status) => {
+    try {
+      await updateDoc(doc(db, 'commerceOrders', order.id), {
+        subscriptionStatus: status,
+      });
+      alert(`Subscription ${status}.`);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update subscription.');
+    }
+  };
+
   const cancelSubscription = async (order) => {
     if (window.confirm('Are you sure you want to cancel this subscription?')) {
       await updateDoc(doc(db, 'commerceOrders', order.id), {
         isRepeatable: false,
-        repeatFrequency: null,
+        subscriptionStatus: 'cancelled',
       });
       alert('Subscription cancelled.');
     }
@@ -464,13 +476,34 @@ const CustomerOrders = () => {
 
               {o.isRepeatable && (
                 <div style={{ marginTop: '10px', padding: '5px', border: '1px dashed #2196F3', backgroundColor: '#E3F2FD' }}>
-                  <strong>Subscription Active:</strong> Repeats Monthly
-                  <button
-                    onClick={() => cancelSubscription(o)}
-                    style={{ marginLeft: '10px', fontSize: '0.8em', backgroundColor: '#FF9800', color: 'white', border: 'none', padding: '3px 8px', cursor: 'pointer' }}
-                  >
-                    Cancel Subscription
-                  </button>
+                  <strong>Subscription:</strong> {o.repeatFrequency === 'custom' ? `Every ${o.customFrequencyDays} days` : o.repeatFrequency}
+                  <span style={{ marginLeft: '10px', color: 'green' }}>({o.subscriptionDiscount}% off)</span>
+                  <br />
+                  <strong>Status:</strong> {o.subscriptionStatus || 'active'}
+                  <div style={{ marginTop: '5px' }}>
+                    {o.subscriptionStatus !== 'paused' && (
+                      <button
+                        onClick={() => updateSubscriptionStatus(o, 'paused')}
+                        style={{ marginRight: '8px', fontSize: '0.8em' }}
+                      >
+                        Pause
+                      </button>
+                    )}
+                    {o.subscriptionStatus === 'paused' && (
+                      <button
+                        onClick={() => updateSubscriptionStatus(o, 'active')}
+                        style={{ marginRight: '8px', fontSize: '0.8em' }}
+                      >
+                        Resume
+                      </button>
+                    )}
+                    <button
+                      onClick={() => cancelSubscription(o)}
+                      style={{ fontSize: '0.8em', backgroundColor: '#FF9800', color: 'white', border: 'none', padding: '3px 8px', cursor: 'pointer' }}
+                    >
+                      Cancel Subscription
+                    </button>
+                  </div>
                 </div>
               )}
               <div style={{ marginTop: '5px' }}>

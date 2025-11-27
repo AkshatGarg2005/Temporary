@@ -26,6 +26,22 @@ const CommerceCart = () => {
   const [consultations, setConsultations] = useState([]);
   const [selectedConsultationId, setSelectedConsultationId] = useState('');
   const [isRepeatable, setIsRepeatable] = useState(false);
+  const [subscriptionFrequency, setSubscriptionFrequency] = useState('monthly');
+  const [customFrequencyDays, setCustomFrequencyDays] = useState(7);
+
+  const calculateDiscount = () => {
+    if (!isRepeatable) return 0;
+    if (subscriptionFrequency === 'daily') return 2;
+    if (subscriptionFrequency === 'monthly') return 3;
+    if (subscriptionFrequency === 'yearly') return 5;
+    if (subscriptionFrequency === 'custom') {
+      const days = parseInt(customFrequencyDays, 10) || 0;
+      if (days < 30) return 2;
+      if (days < 365) return 3;
+      return 5;
+    }
+    return 0;
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -158,8 +174,11 @@ const CommerceCart = () => {
           specialRequest: item.specialRequest || null,
           prescriptionUrl: isMedicine ? finalPrescription : null,
           status: isMedicine ? 'pending_prescription_review' : 'pending',
-          isRepeatable: isMedicine && isRepeatable ? true : false,
-          repeatFrequency: isMedicine && isRepeatable ? 'monthly' : null,
+          isRepeatable: isRepeatable,
+          repeatFrequency: isRepeatable ? subscriptionFrequency : null,
+          customFrequencyDays: isRepeatable && subscriptionFrequency === 'custom' ? parseInt(customFrequencyDays, 10) : null,
+          subscriptionDiscount: isRepeatable ? calculateDiscount() : 0,
+          subscriptionStatus: isRepeatable ? 'active' : null,
           deliveryPartnerId: null,
           address: savedAddress,
           createdAt: serverTimestamp(),
@@ -276,6 +295,11 @@ const CommerceCart = () => {
         <div style={{ marginTop: '16px' }}>
           <p>
             <strong>Cart total:</strong> ₹{cartTotal.toFixed(2)}
+            {isRepeatable && (
+              <span style={{ color: 'green', marginLeft: '10px' }}>
+                (Discounted Total: ₹{(cartTotal * (1 - calculateDiscount() / 100)).toFixed(2)})
+              </span>
+            )}
           </p>
 
           {hasMedicine && (
@@ -338,23 +362,58 @@ const CommerceCart = () => {
                 </label>
               </div>
 
-              <div style={{ marginTop: '10px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="checkbox"
-                    checked={isRepeatable}
-                    onChange={(e) => setIsRepeatable(e.target.checked)}
-                  />
-                  <strong>Repeat this order every month</strong>
-                </label>
-                <small style={{ display: 'block', color: '#666', marginLeft: '24px' }}>
-                  We will automatically place this order for you every month until you cancel.
-                </small>
-              </div>
-
-
             </div>
           )}
+
+          <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <input
+                type="checkbox"
+                checked={isRepeatable}
+                onChange={(e) => setIsRepeatable(e.target.checked)}
+              />
+              <strong>Subscribe to this bundle</strong>
+            </label>
+
+            {isRepeatable && (
+              <div style={{ marginLeft: '24px' }}>
+                <label style={{ display: 'block', marginBottom: '5px' }}>
+                  Delivery Frequency:
+                  <select
+                    value={subscriptionFrequency}
+                    onChange={(e) => setSubscriptionFrequency(e.target.value)}
+                    style={{ marginLeft: '10px', padding: '5px' }}
+                  >
+                    <option value="daily">Daily (2% off)</option>
+                    <option value="monthly">Monthly (3% off)</option>
+                    <option value="yearly">Yearly (5% off)</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </label>
+
+                {subscriptionFrequency === 'custom' && (
+                  <label style={{ display: 'block', marginBottom: '5px' }}>
+                    Every
+                    <input
+                      type="number"
+                      min="1"
+                      value={customFrequencyDays}
+                      onChange={(e) => setCustomFrequencyDays(e.target.value)}
+                      style={{ width: '50px', margin: '0 5px' }}
+                    />
+                    days
+                  </label>
+                )}
+
+                <div style={{ marginTop: '5px', color: 'green', fontWeight: 'bold' }}>
+                  Discount Applied: {calculateDiscount()}%
+                </div>
+                <small style={{ display: 'block', color: '#666', marginTop: '5px' }}>
+                  We will automatically place this order for you based on your selected frequency.
+                </small>
+              </div>
+            )}
+          </div>
 
           <button
             onClick={placeOrder}
