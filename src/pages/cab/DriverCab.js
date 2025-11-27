@@ -117,13 +117,12 @@ const DriverCab = () => {
 
 
 
-  const startRide = async (request) => {
+  const generateOtp = async (request) => {
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
     await updateDoc(doc(db, 'cabRequests', request.id), {
-      status: 'in_progress',
       rideOtp: otp,
     });
-    alert('Ride started! OTP generated.');
+    alert('OTP generated! Ask customer for OTP to start ride.');
   };
 
   const [otpInputs, setOtpInputs] = useState({});
@@ -132,9 +131,7 @@ const DriverCab = () => {
     setOtpInputs((prev) => ({ ...prev, [id]: value }));
   };
 
-  const completeRide = async (request) => {
-    if (request.status !== 'in_progress') return;
-
+  const verifyAndStartRide = async (request) => {
     const enteredOtp = otpInputs[request.id];
     if (!enteredOtp) {
       alert('Please enter the OTP provided by the customer.');
@@ -146,6 +143,14 @@ const DriverCab = () => {
       return;
     }
 
+    await updateDoc(doc(db, 'cabRequests', request.id), {
+      status: 'in_progress',
+    });
+    alert('Ride started!');
+  };
+
+  const endRide = async (request) => {
+    if (request.status !== 'in_progress') return;
     await updateDoc(doc(db, 'cabRequests', request.id), {
       status: 'completed',
     });
@@ -212,16 +217,16 @@ const DriverCab = () => {
                 </div>
               )}
               <div style={{ marginTop: '4px' }}>
-                {r.status === 'accepted' && (
+                {r.status === 'accepted' && !r.rideOtp && (
                   <button
-                    onClick={() => startRide(r)}
+                    onClick={() => generateOtp(r)}
                     style={{ marginRight: '8px' }}
                   >
-                    Start Ride (Generate OTP)
+                    Arrived (Generate OTP)
                   </button>
                 )}
 
-                {r.status === 'in_progress' && (
+                {r.status === 'accepted' && r.rideOtp && (
                   <div style={{ marginTop: '10px' }}>
                     <input
                       type="text"
@@ -230,14 +235,20 @@ const DriverCab = () => {
                       onChange={(e) => handleOtpChange(r.id, e.target.value)}
                       style={{ marginRight: '10px', padding: '5px' }}
                     />
-                    <button onClick={() => completeRide(r)}>
-                      Verify & Complete
+                    <button onClick={() => verifyAndStartRide(r)}>
+                      Start Ride
                     </button>
                   </div>
                 )}
 
+                {r.status === 'in_progress' && (
+                  <button onClick={() => endRide(r)} style={{ backgroundColor: '#f44336', color: 'white' }}>
+                    End Ride
+                  </button>
+                )}
+
                 {(r.status === 'accepted' || r.status === 'in_progress') && (
-                  <button onClick={() => setActiveChatRequestId(r.id)}>
+                  <button onClick={() => setActiveChatRequestId(r.id)} style={{ marginLeft: '8px' }}>
                     Chat
                   </button>
                 )}

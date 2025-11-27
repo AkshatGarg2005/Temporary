@@ -534,11 +534,11 @@ const CustomerOrders = () => {
                     {driver.phone && ` (Phone: ${driver.phone})`}
                   </div>
                 )}
-                {c.status === 'in_progress' && c.rideOtp && (
+                {c.rideOtp && c.status !== 'completed' && (
                   <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#e0f7fa', border: '1px solid #006064' }}>
                     <strong>Ride OTP: {c.rideOtp}</strong>
                     <br />
-                    <small>Share this code with the driver to complete the ride.</small>
+                    <small>Share this code with the driver to START the ride.</small>
                   </div>
                 )}
                 <div style={{ marginTop: '4px' }}>
