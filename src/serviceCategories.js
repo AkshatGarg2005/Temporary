@@ -7,5 +7,6 @@ export const SERVICE_CATEGORIES = [
   'Painter',
   'Gardener',
   'Appliance Repair',
+  'Labour',
   'Other',
 ];

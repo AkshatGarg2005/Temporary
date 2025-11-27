@@ -7,6 +7,7 @@ import { ROLE_OPTIONS } from '../../roles';
 import { SERVICE_CATEGORIES } from '../../serviceCategories';
 
 const Register = () => {
+  // Force recompile
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [role, setRole] = useState('CUSTOMER');
